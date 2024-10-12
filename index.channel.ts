@@ -2,7 +2,7 @@ import { text } from 'stream/consumers';
 
 import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -26,19 +26,23 @@ import {
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { LoggerService } from '@/logger/logger.service';
 import { NlpService } from '@/nlp/services/nlp.service';
+import { SettingCreateDto } from '@/setting/dto/setting.dto';
+import { Setting } from '@/setting/schemas/setting.schema';
 import { SettingService } from '@/setting/services/setting.service';
 import { blocks } from '@/utils/test/fixtures/block';
 import { SocketRequest } from '@/websocket/utils/socket-request';
 import { SocketResponse } from '@/websocket/utils/socket-response';
 
-import { SLACK_CHANNEL_NAME } from './settings';
+import { DEFAULT_SLACK_SETTINGS, SLACK_CHANNEL_NAME } from './settings';
 import { slackApi } from './slack-api';
 import { Slack } from './types';
 import SlackEventWrapper from './wrapper';
 
 @Injectable()
 export class SlackHandler extends ChannelHandler {
-  private readonly api = new slackApi();
+  private api;
+
+  protected settings: SettingCreateDto[] = DEFAULT_SLACK_SETTINGS;
 
   constructor(
     settingService: SettingService,
@@ -57,6 +61,9 @@ export class SlackHandler extends ChannelHandler {
 
   async init(): Promise<void> {
     this.logger.debug('Slack Channel Handler: Initializing...');
+    debugger;
+    const settings = await this.getSettings<Slack.Settings>();
+    this.api = new slackApi(settings.access_token);
   }
 
   handle(req: Request, res: Response) {
@@ -201,7 +208,9 @@ export class SlackHandler extends ChannelHandler {
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
-    const fields = options.content.fields;
+    debugger;
+    return [];
+    /*const fields = options.content.fields;
     const buttons = options.content.buttons;
     //To build a list :
     const blocks: Array<Slack.KnownBlock> = [{ type: 'divider' }];
@@ -271,6 +280,7 @@ export class SlackHandler extends ChannelHandler {
       blocks.push({ type: 'divider' });
     });
     return blocks;
+  */
   }
 
   _listFormat(message: StdOutgoingMessage, options: any, ...args: any) {
@@ -343,6 +353,14 @@ export class SlackHandler extends ChannelHandler {
 
       default:
         throw new Error('Unknown message format');
+    }
+  }
+
+  @OnEvent('hook:setting:*') //TODO: to provide the correct event name for accessTokenUpdate and remove the extra conditions
+  async onAccessTokenUpdate(setting: any): Promise<void> {
+    //TODO: to provide the correct type for setting
+    if (setting.group === 'slack' && setting.label === 'access_token') {
+      this.api = new slackApi(setting.value);
     }
   }
 }

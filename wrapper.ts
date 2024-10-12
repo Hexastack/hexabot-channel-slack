@@ -15,7 +15,6 @@ import {
 } from '@/chat/schemas/types/message';
 import { Payload, PayloadType } from '@/chat/schemas/types/quick-reply';
 
-import { SLACK_APP_ID, SLACK_BOT_ID } from './settings';
 import { Slack } from './types';
 
 type SlackEventAdapter = {
