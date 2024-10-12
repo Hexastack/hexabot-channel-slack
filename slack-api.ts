@@ -1,20 +1,25 @@
+import { access } from 'fs';
+
 import { HttpService } from '@nestjs/axios';
+import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { firstValueFrom } from 'rxjs';
 
-import { token } from './settings';
 import { Slack } from './types';
 
 export class slackApi {
   private readonly httpService: HttpService;
 
   //TODO: handle api errors
-  constructor() {
+  constructor(access_token: string) {
+    if (!access_token) {
+      Logger.error('Slack Api: access token is missing');
+    }
     const axiosInstance = axios.create({
       baseURL: 'https://slack.com/api',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${access_token}`,
       },
     });
     axiosInstance.interceptors.request.use((config) => {
@@ -35,13 +40,11 @@ export class slackApi {
   }
 
   async sendMessage(message: any, channel) {
-    console.log('sending message:', message, channel);
     const res = await firstValueFrom(
       this.httpService.post(Slack.ApiEndpoint.chatPostMessage, {
         channel,
         ...message,
       }),
     );
-    console.log('res of sending message:', res);
   }
 }

@@ -1,11 +1,10 @@
-/**
- * @file Slack types
- * @author Hexastack <contact@hexastack.com>
- */
-
-import e from 'express';
-
 export namespace Slack {
+  export enum SettingLabel {
+    access_token = 'access_token',
+  }
+
+  export type Settings = Record<SettingLabel, any>;
+
   export enum SlackType { //TODO: to update https://api.slack.com/apis/events-api#event_type_structure
     app_home_opened = 'app_home_opened',
     payload = 'payload',
