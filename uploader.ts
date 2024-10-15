@@ -1,74 +1,34 @@
-// import mime from 'mime';
+import * as fs from 'fs';
 
-// import { Slack } from './types';
+import { Attachment } from '@/attachment/schemas/attachment.schema';
+import {
+  AttachmentForeignKey,
+  AttachmentPayload,
+  WithUrl,
+} from '@/chat/schemas/types/attachment';
 
-// export default class SlackFileUploader {
-//   constructor(private file_path: string) {}
+import { SlackApi } from './slack-api';
+import { Slack } from './types';
 
-//   upload(): Promise<Slack.FileMessage> {}
+export default class SlackFileUploader {
+  constructor(
+    private slackApi: SlackApi,
+    private attachement: AttachmentPayload<WithUrl<Attachment>>, // TODO: also take into consideration AttachmentForeignKey
+    private channel: string,
+  ) {}
 
-//   _getLocalFile(): Promise<string> {
-//     const self = this;
-//     // Download file if remote
-//     if (self._file_path.startsWith('http')) {
-//       const parsed = url.parse(self._file_path);
-//       const filename = path.basename(parsed.pathname) || uuidv4();
-//       let dest;
-//       if (self._file_path.startsWith(sails.config.parameters.apiUrl)) {
-//         const attachmentId = path.basename(path.dirname(parsed.pathname));
-//         return Attachment.findOne({ id: attachmentId, name: filename })
-//           .then((attachment) => {
-//             dest = path.join(
-//               sails.config.appPath,
-//               sails.config.parameters.uploadDir,
-//               attachment.location,
-//             );
-//             return dest;
-//           })
-//           .catch((err: Error) => {
-//             sails.log.error(
-//               'Slack Channel Handler : Error finding the attachment in the database',
-//               err,
-//             );
-//             throw err;
-//           });
-//       } else {
-//         dest = path.join(sails.config.parameters.tmpDir, filename);
-//         if (fs.existsSync(dest)) {
-//           sails.log.debug('Slack File Upload : Serving local file');
-//           return Promise.resolve(dest);
-//         } else {
-//           return self._download(this._file_path, dest);
-//         }
-//       }
-//     }
-//     // If param is local path
-//     return Promise.resolve(self._file_path);
-//   }
+  async upload() {
+    const { upload_url, file_id } = await this.slackApi.getUploadURL(
+      this.attachement.payload.url,
+      this.attachement.payload.size,
+    );
+    await this.uploadToSlack(upload_url);
+    await this.slackApi.CompleteUpload([{ id: file_id }], this.channel);
+    return file_id;
+  }
 
-//   /**
-//    * @method module:Channels/Slack/SlackFileUploader._download
-//    * @return {String} Remote file URL
-//    * @return {String} Local file path
-//    * @return {Promise<String>}
-//    * @description - Download remote file and return local path
-//    */
-//   _download(url: string, dest: string): Promise<string> {
-//     sails.log.debug('Slack File Upload : downloading file');
-//     return new Promise((resolve, reject) => {
-//       const file = fs.createWriteStream(dest, { flags: 'wx' });
-
-//       request(url).pipe(file);
-
-//       file.on('error', (err) => {
-//         file.close();
-//         fs.unlink(dest, () => {}); // Delete temp file
-//         reject(err);
-//       });
-
-//       file.on('finish', () => {
-//         resolve(dest);
-//       });
-//     });
-//   }
-// }
+  private async uploadToSlack(uploadUrl: string) {
+    const fileStream = 'aaa'; //fs.createReadStream(this.attachement.payload.url);
+    await this.slackApi.uploadFile(uploadUrl, fileStream);
+  }
+}

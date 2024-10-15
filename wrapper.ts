@@ -57,6 +57,8 @@ export default class SlackEventWrapper extends EventWrapper<
         channel_type: 'im',
         api_app_id: payload.api_app_id,
         event_ts: payload.action_ts || payload.actions[0].action_ts,
+        response_url: payload.response_url,
+        original_message: payload.original_message,
       };
     } else if ((<Slack.CommandEvent>data).command) {
       //if the event is a slash command event
@@ -129,6 +131,14 @@ export default class SlackEventWrapper extends EventWrapper<
       return StdEventType.message;
     }
     return StdEventType.unknown;
+  }
+
+  isQuickReplies(): boolean {
+    debugger;
+    return (
+      this._raw.original_message?.attachments?.[0]?.callback_id ===
+      Slack.CallbackId.quick_replies
+    );
   }
 
   getMessageType(): IncomingMessageType {
@@ -246,5 +256,9 @@ export default class SlackEventWrapper extends EventWrapper<
 
   getWatermark(): number {
     return 0; //TODO: to implement??
+  }
+
+  getResponseUrl(): string {
+    return this._raw.response_url;
   }
 }
