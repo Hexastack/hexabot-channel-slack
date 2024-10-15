@@ -6,10 +6,12 @@ import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
+import { Attachment } from '@/attachment/schemas/attachment.schema';
 import { ChannelService } from '@/channel/channel.service';
 import EventWrapper from '@/channel/lib/EventWrapper';
 import ChannelHandler from '@/channel/lib/Handler';
 import { SubscriberCreateDto } from '@/chat/dto/subscriber.dto';
+import { WithUrl } from '@/chat/schemas/types/attachment';
 import {
   Button,
   PostBackButton,
@@ -22,6 +24,7 @@ import {
   StdOutgoingTextMessage,
   StdOutgoingQuickRepliesMessage,
   StdOutgoingButtonsMessage,
+  StdOutgoingAttachmentMessage,
 } from '@/chat/schemas/types/message';
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { LoggerService } from '@/logger/logger.service';
@@ -34,13 +37,14 @@ import { SocketRequest } from '@/websocket/utils/socket-request';
 import { SocketResponse } from '@/websocket/utils/socket-response';
 
 import { DEFAULT_SLACK_SETTINGS, SLACK_CHANNEL_NAME } from './settings';
-import { slackApi } from './slack-api';
+import { SlackApi } from './slack-api';
 import { Slack } from './types';
+import SlackFileUploader from './uploader';
 import SlackEventWrapper from './wrapper';
 
 @Injectable()
 export class SlackHandler extends ChannelHandler {
-  private api;
+  private api: SlackApi;
 
   protected settings: SettingCreateDto[] = DEFAULT_SLACK_SETTINGS;
 
@@ -61,9 +65,8 @@ export class SlackHandler extends ChannelHandler {
 
   async init(): Promise<void> {
     this.logger.debug('Slack Channel Handler: Initializing...');
-    debugger;
     const settings = await this.getSettings<Slack.Settings>();
-    this.api = new slackApi(settings.access_token);
+    this.api = new SlackApi(settings.access_token);
   }
 
   handle(req: Request, res: Response) {
@@ -81,6 +84,9 @@ export class SlackHandler extends ChannelHandler {
       const event = new SlackEventWrapper(this, data);
       event.set('mid', this._generateId());
       const type = event.getEventType();
+      if (event.isQuickReplies()) {
+        this.editQuickRepliesSourceMessage(event);
+      }
 
       if (type) {
         this.eventEmitter.emit('hook:chatbot:' + type, event);
@@ -96,8 +102,7 @@ export class SlackHandler extends ChannelHandler {
         error,
       );
     }
-
-    return res.status(200).json({ success: true });
+    return res.status(200).send('');
   }
 
   //TODO: duplicate method
@@ -129,7 +134,7 @@ export class SlackHandler extends ChannelHandler {
           {
             text: message.text,
             actions,
-            callback_id: 'slack_replies_' + actions[0].value,
+            callback_id: Slack.CallbackId.quick_replies,
           },
         ],
       };
@@ -202,9 +207,16 @@ export class SlackHandler extends ChannelHandler {
     };
   }
 
-  _attachmentFormat(message: StdOutgoingMessage, options?: any) {
-    debugger;
-    throw new Error('Method not implemented.');
+  async _attachmentFormat(
+    message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
+    options?: any,
+  ) {
+    const fileUploader = new SlackFileUploader(
+      this.api,
+      message.attachment,
+      'U07PKPB6W2Y',
+    );
+    return await fileUploader.upload();
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
@@ -299,10 +311,16 @@ export class SlackHandler extends ChannelHandler {
     options: any,
     context: any,
   ): Promise<{ mid: string }> {
-    //debugger;
+    debugger;
     const message = this._formatMessage(envelope, options);
+
     await this.api.sendMessage(message, event.getSenderForeignId());
     return { mid: this._generateId() };
+  }
+
+  editQuickRepliesSourceMessage(event: SlackEventWrapper) {
+    const text = event._raw.original_message.attachments[0].text;
+    this.api.sendResponse({ text }, event.getResponseUrl()); // TODO: (check) assuming that quickreply message is only one attachment
   }
 
   async getUserData(
@@ -360,7 +378,7 @@ export class SlackHandler extends ChannelHandler {
   async onAccessTokenUpdate(setting: any): Promise<void> {
     //TODO: to provide the correct type for setting
     if (setting.group === 'slack' && setting.label === 'access_token') {
-      this.api = new slackApi(setting.value);
+      this.api = new SlackApi(setting.value);
     }
   }
 }

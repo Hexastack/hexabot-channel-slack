@@ -25,8 +25,14 @@ export namespace Slack {
   export enum ApiEndpoint {
     usersInfo = 'users.info',
     chatPostMessage = 'chat.postMessage',
+    getUploadURL = 'files.getUploadURLExternal',
+    completeUpload = 'files.completeUploadExternal',
   }
 
+  export enum CallbackId {
+    quick_replies = 'quick_replies',
+    buttons = 'buttons',
+  }
   /**
    *  User Information
    */
@@ -144,6 +150,9 @@ export namespace Slack {
 
     client_msg_id?: string;
 
+    response_url?: string;
+    original_message?: Event;
+
     mid?: string;
     bot_id?: string;
     subtype?: string;
@@ -154,11 +163,10 @@ export namespace Slack {
     team?: string;
     blocks?: BlockObject[];
     channel?: string;
-    attachments?: AttachmentMessage;
+    attachments?: MessageAttachment[];
     channel_type?: 'im' | 'mpim' | 'private' | 'public' | 'channel';
   }
 
-  //TODO: checked
   export enum SubtypeEvent { //TODmtbh: in INcomingAttachement??O: add more subtypes (like "message_replied")
     echo_message = 'bot_message',
     file_share = 'file_share',
@@ -296,8 +304,6 @@ export namespace Slack {
   }
 
   export type BodyEvent = IncomingEvent | PayloadEvent | CommandEvent;
-
-  // OutgoingMessage :
 
   export interface OutgoingMessage {
     channel?: string;
@@ -510,4 +516,10 @@ export namespace Slack {
   }
 
   export type RequestBody = OutgoingMessageData | Profile | Action | {};
+
+  export type UploadUrlData = {
+    ok: boolean;
+    upload_url: string;
+    file_id: string;
+  };
 }
