@@ -15,6 +15,10 @@ export class SlackApi {
     this.buildHttpService(access_token);
   }
 
+  setAccessToken(access_token: string) {
+    this.buildHttpService(access_token);
+  }
+
   private buildHttpService(access_token: string) {
     if (!access_token) {
       Logger.error('Slack Api: access token is missing');
@@ -26,10 +30,13 @@ export class SlackApi {
         Authorization: `Bearer ${access_token}`,
       },
     });
-    axiosInstance.interceptors.request.use((config) => {
-      console.log('sending Requesssst:', config);
-      return config;
-    });
+    axiosInstance.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        Logger.error('Slack Api: Error', error);
+        return Promise.reject(error); // Reject the promise to handle the error downstream
+      },
+    );
     this.httpService = new HttpService(axiosInstance);
   }
 
@@ -91,6 +98,11 @@ export class SlackApi {
   }
 
   async sendResponse(message: any, responseUrl: string) {
-    await axios.post(responseUrl, message);
+    try {
+      await axios.post(responseUrl, message);
+    } catch (e) {
+      Logger.error('Slack Api: Error sending response', e);
+      console.error('Slack Api: Error sending response', e);
+    }
   }
 }

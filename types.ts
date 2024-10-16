@@ -391,7 +391,7 @@ export namespace Slack {
     text: PlainTextElement | string;
     value?: string;
     url?: string;
-    style?: 'danger' | 'primary';
+    style?: 'default' | 'danger' | 'primary';
     confirm?: Confirmation;
   }
 

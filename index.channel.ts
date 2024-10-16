@@ -14,6 +14,7 @@ import { SubscriberCreateDto } from '@/chat/dto/subscriber.dto';
 import { WithUrl } from '@/chat/schemas/types/attachment';
 import {
   Button,
+  ButtonType,
   PostBackButton,
   WebUrlButton,
 } from '@/chat/schemas/types/button';
@@ -55,6 +56,7 @@ export class SlackHandler extends ChannelHandler {
     logger: LoggerService,
     protected readonly eventEmitter: EventEmitter2,
     protected readonly httpService: HttpService,
+    protected readonly settingsService: SettingService,
   ) {
     super(settingService, channelService, nlpService, logger);
   }
@@ -118,7 +120,6 @@ export class SlackHandler extends ChannelHandler {
 
   _quickRepliesFormat(message: StdOutgoingQuickRepliesMessage, options?: any) {
     if (true) {
-      //Buttons with text
       const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
         const format_btn: Slack.Button = {
           name: btn.title,
@@ -128,7 +129,7 @@ export class SlackHandler extends ChannelHandler {
         };
         return format_btn;
       });
-
+      debugger;
       return {
         attachments: [
           {
@@ -146,8 +147,6 @@ export class SlackHandler extends ChannelHandler {
           text: 'This is a section block with a button.',
         },
       };
-      //Buttons without text
-      //TODO: to ask, is this still possible
       const elements = message.quickReplies.map((btn) => {
         return {
           type: 'button',
@@ -172,6 +171,42 @@ export class SlackHandler extends ChannelHandler {
     ...args: any
   ) {
     debugger;
+    const textSection = {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'This is a section block with a button.',
+      },
+    };
+    const elements = message.buttons.map((btn) => {
+      // TODO: handle non compact urls with link unfurling: https://api.slack.com/reference/messaging/link-unfurling#event_deliveries
+      if (btn.type === ButtonType.web_url) {
+        return {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: btn.title,
+            emoji: true,
+          },
+          value: 'url',
+          url: btn.url,
+        };
+      } else {
+        return {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: btn.title,
+            emoji: true,
+          },
+          value: btn.payload,
+        };
+      }
+    });
+    //.slice(0, 3); //TODO: why slice??
+    return {
+      blocks: [textSection, { type: 'actions', elements }],
+    };
     const actions: Array<Slack.Button> = message.buttons
       .map((btn: Button) => {
         debugger;
@@ -319,8 +354,13 @@ export class SlackHandler extends ChannelHandler {
   }
 
   editQuickRepliesSourceMessage(event: SlackEventWrapper) {
-    const text = event._raw.original_message.attachments[0].text;
-    this.api.sendResponse({ text }, event.getResponseUrl()); // TODO: (check) assuming that quickreply message is only one attachment
+    const text =
+      event._raw.original_message.attachments[0].text +
+      '\n\n_You chose: ' +
+      '*' +
+      event._raw.actions[0].value +
+      '*_';
+    this.api.sendResponse({ attachments: [{ text }] }, event.getResponseUrl()); // TODO: (check) assuming that quickreply message is only one attachment
   }
 
   async getUserData(
@@ -374,11 +414,13 @@ export class SlackHandler extends ChannelHandler {
     }
   }
 
-  @OnEvent('hook:setting:*') //TODO: to provide the correct event name for accessTokenUpdate and remove the extra conditions
-  async onAccessTokenUpdate(setting: any): Promise<void> {
-    //TODO: to provide the correct type for setting
-    if (setting.group === 'slack' && setting.label === 'access_token') {
-      this.api = new SlackApi(setting.value);
+  @OnEvent('hook:setting:postUpdate')
+  async onAccessTokenUpdate(setting: Setting): Promise<void> {
+    if (
+      setting.group === SLACK_CHANNEL_NAME &&
+      setting.label === Slack.SettingLabel.access_token
+    ) {
+      this.api.setAccessToken(setting.value);
     }
   }
 }
