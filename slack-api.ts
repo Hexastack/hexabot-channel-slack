@@ -72,24 +72,23 @@ export class SlackApi {
     ).data;
   }
 
-  async uploadFile(uploadUrl: string, fileStream: any) {
-    //TODO: remove any
-    const header = {
-      'Content-Type': 'application/octet-stream',
-    };
-
-    const res = await this.httpService.post(uploadUrl, fileStream, {
-      headers: header,
-    });
+  async uploadFile(uploadUrl: string, buffer: Buffer) {
+    const res = await firstValueFrom(
+      this.httpService.post(uploadUrl, buffer, {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      }),
+    );
     debugger;
     return res; //TODO: to remove the res variable.
   }
 
-  async CompleteUpload(files: any, channel: string) {
+  async CompleteUpload(files: any, channel_id: string) {
     //TODO: remove any
     const a = await firstValueFrom(
       this.httpService.post(Slack.ApiEndpoint.completeUpload, {
-        channel,
+        channel_id,
         files,
       }),
     );
@@ -102,7 +101,6 @@ export class SlackApi {
       await axios.post(responseUrl, message);
     } catch (e) {
       Logger.error('Slack Api: Error sending response', e);
-      console.error('Slack Api: Error sending response', e);
     }
   }
 }

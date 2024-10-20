@@ -1,5 +1,3 @@
-import { text } from 'stream/consumers';
-
 import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
@@ -7,6 +5,7 @@ import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
+import { AttachmentService } from '@/attachment/services/attachment.service';
 import { ChannelService } from '@/channel/channel.service';
 import EventWrapper from '@/channel/lib/EventWrapper';
 import ChannelHandler from '@/channel/lib/Handler';
@@ -57,6 +56,7 @@ export class SlackHandler extends ChannelHandler {
     protected readonly eventEmitter: EventEmitter2,
     protected readonly httpService: HttpService,
     protected readonly settingsService: SettingService,
+    protected readonly attachmentService: AttachmentService,
   ) {
     super(settingService, channelService, nlpService, logger);
   }
@@ -250,8 +250,20 @@ export class SlackHandler extends ChannelHandler {
       this.api,
       message.attachment,
       'U07PKPB6W2Y',
+      this.attachmentService,
     );
-    return await fileUploader.upload();
+    const fileId = await fileUploader.upload();
+    return {
+      blocks: [{ type: 'text', text: 'This is an attachment' }] /*
+        {
+          type: 'image',
+          slack_file: {
+            id: fileId,
+          },
+          alt_text: 'heheh this is alt_text, // TODO: to remove',
+        },
+      ],*/,
+    };
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
@@ -347,7 +359,7 @@ export class SlackHandler extends ChannelHandler {
     context: any,
   ): Promise<{ mid: string }> {
     debugger;
-    const message = this._formatMessage(envelope, options);
+    const message = await this._formatMessage(envelope, options);
 
     await this.api.sendMessage(message, event.getSenderForeignId());
     return { mid: this._generateId() };
@@ -391,13 +403,16 @@ export class SlackHandler extends ChannelHandler {
     };
   }
 
-  _formatMessage(envelope: StdOutgoingEnvelope, options: BlockOptions): any {
+  async _formatMessage(
+    envelope: StdOutgoingEnvelope,
+    options: BlockOptions,
+  ): Promise<any> {
     //debugger;
     //TODO: Why is this method not in ChannelHandler?
     //TODO: update return type
     switch (envelope.format) {
       case OutgoingMessageFormat.attachment:
-        return this._attachmentFormat(envelope.message, options);
+        return await this._attachmentFormat(envelope.message, options);
       case OutgoingMessageFormat.buttons:
         return this._buttonsFormat(envelope.message, options);
       case OutgoingMessageFormat.carousel:
@@ -415,7 +430,7 @@ export class SlackHandler extends ChannelHandler {
   }
 
   @OnEvent('hook:setting:postUpdate')
-  async onAccessTokenUpdate(setting: Setting): Promise<void> {
+  async onAccessTokenUpdate(setting: Setting) {
     if (
       setting.group === SLACK_CHANNEL_NAME &&
       setting.label === Slack.SettingLabel.access_token
