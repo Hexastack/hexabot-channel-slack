@@ -158,7 +158,7 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getPayload(): Payload | string | undefined {
-    ////debugger;
+    // TODO: to optimize
     if (this.getEventType() === StdEventType.message) {
       const eventType = this.getMessageType();
       switch (eventType) {
