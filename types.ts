@@ -11,6 +11,10 @@ export namespace Slack {
     access_token = 'access_token',
   }
 
+  export type ChannelData = {
+    channel_id: string;
+  };
+
   export type Settings = Record<SettingLabel, any>;
 
   export enum SlackType { //TODO: to update https://api.slack.com/apis/events-api#event_type_structure

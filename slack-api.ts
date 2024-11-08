@@ -44,15 +44,12 @@ export class SlackApi {
             `${response.data.error}: ${response.data.errors?.join(', ')}`,
             'Error: Slack API',
           );
-          const error = new Error(response.data.error || 'Unknown error');
-          return Promise.reject(error);
         }
         return response;
       },
       (error) => {
         debugger; //
         Logger.error(error, 'Error: Slack Api');
-        return Promise.reject(error); // Reject the promise to handle the error downstream
       },
     );
     this.httpService = new HttpService(axiosInstance);
@@ -108,7 +105,7 @@ export class SlackApi {
     //debugger;
     const a = await firstValueFrom(
       this.httpService.post(Slack.ApiEndpoint.completeUpload, {
-        channel_id: 'C0803AP9E4B',
+        channel_id,
         files,
       }),
     );

@@ -43,7 +43,6 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   constructor(handler: ChannelHandler, data: Slack.BodyEvent) {
     debugger;
-    super(handler, data as any); //TODO: remove any
     let data_event: Slack.Event;
     if ((<Slack.IncomingEvent>data).event) {
       data_event = (<Slack.IncomingEvent>data).event;
@@ -78,9 +77,10 @@ export default class SlackEventWrapper extends EventWrapper<
         team: datac.team_id,
         channel: datac.channel_id,
         channel_type: 'im',
-      } as Slack.Event; //TODO: to remove the any
+      } as Slack.Event;
     }
-
+    const channelData: Slack.ChannelData = { channel_id: data_event.channel };
+    super(handler, data_event, channelData);
     this._raw = data_event;
   }
 
@@ -97,12 +97,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getSenderForeignId(): string {
-    if (this.getEventType() === StdEventType.echo) {
-      console.error(
-        'Not emplemented: getSenderForeignId called with event type echo ',
-      );
-    }
-
     return this._raw.user || null;
   }
 
@@ -114,15 +108,9 @@ export default class SlackEventWrapper extends EventWrapper<
 
   getEventType(): StdEventType {
     //TODO: to test all the cases
+    //TODO: to optimize
     const msg = this._raw;
-
-    if (msg.user == 'sails.settings.slack_user_id ???') {
-      //TODO: to implement
-      ////debugger;
-      throw new Error('Method not implemented.');
-    }
     if (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id) {
-      //debugger;
       return StdEventType.echo;
     }
 

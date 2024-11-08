@@ -116,7 +116,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   _quickRepliesFormat(message: StdOutgoingQuickRepliesMessage, options?: any) {
-    if (true) {
       const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
         const format_btn: Slack.Button = {
           name: btn.title,
@@ -126,7 +125,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         };
         return format_btn;
       });
-      //debugger;
+
       return {
         attachments: [
           {
@@ -136,30 +135,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           },
         ],
       };
-    } else {
-      const textSection = {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: 'This is a section block with a button.',
-        },
-      };
-      const elements = message.quickReplies.map((btn) => {
-        return {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: btn.title,
-            emoji: true,
-          },
-          value: btn.payload,
-        };
-      });
-      //.slice(0, 3); //TODO: why slice??
-      return {
-        blocks: [textSection, { type: 'actions', elements }],
-      };
-    }
   }
 
   _buttonsFormat(
@@ -242,31 +217,23 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
   async _attachmentFormat(
     message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
+    channel: string,
     options?: any,
   ) {
     const fileUploader = new SlackFileUploader(
       this.api,
       message.attachment,
-      'U07PKPB6W2Y',
+      channel,
       this.attachmentService,
     );
-    const files = await fileUploader.upload(); //TODO: to make return an element instead of an array
+    await fileUploader.upload();
 
-    //wait a little the time slack processes the upload
-    // TODO: is this the right approach?
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    return {
-      blocks: files.map((file) => {
-        return {
-          type: 'image',
-          slack_file: {
-            id: file.id,
-          },
-          alt_text: 'image',
-        };
-      }),
-    };
+    if (message.quickReplies?.length > 0)
+      return this._quickRepliesFormat({
+        text: '',
+        quickReplies: message.quickReplies,
+      });
+    return undefined;
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
@@ -356,15 +323,19 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   async sendMessage(
-    event: SlackEventWrapper,
+    event: EventWrapper<any, any>,
     envelope: StdOutgoingEnvelope,
     options: any,
     context: any,
   ): Promise<{ mid: string }> {
-    //debugger;
-    const message = await this._formatMessage(envelope, options);
+    debugger;
+    const channel = (event._profile.channel as any).channel_id; //TODO: remove the any
+    const message = await this._formatMessage(envelope, channel, options);
 
-    await this.api.sendMessage(message, event.getSenderForeignId());
+    if (message) {
+      await this.api.sendMessage(message, channel);
+    }
+
     return { mid: this._generateId() };
   }
 
@@ -373,15 +344,14 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       event._raw.original_message.attachments[0].text +
       '\n\n_You chose: ' +
       '*' +
-      event._raw.actions[0].value +
+      event._raw.actions[0].name +
       '*_';
-    this.api.sendResponse({ attachments: [{ text }] }, event.getResponseUrl()); // TODO: (check) assuming that quickreply message is only one attachment
+    this.api.sendResponse({ attachments: [{ text }] }, event.getResponseUrl()); // assuming that quickreply message is only one attachment
   }
 
   async getUserData(
     event: EventWrapper<any, any>,
   ): Promise<SubscriberCreateDto> {
-    ////debugger;
     const user = await this.api.getUserInfo(event.getSenderForeignId());
 
     const profile = user.profile;
@@ -408,6 +378,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
   async _formatMessage(
     envelope: StdOutgoingEnvelope,
+    channel: string,
     options: BlockOptions,
   ): Promise<any> {
     ////debugger;
@@ -415,7 +386,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     //TODO: update return type
     switch (envelope.format) {
       case OutgoingMessageFormat.attachment:
-        return await this._attachmentFormat(envelope.message, options);
+        return await this._attachmentFormat(envelope.message, channel, options);
       case OutgoingMessageFormat.buttons:
         return this._buttonsFormat(envelope.message, options);
       case OutgoingMessageFormat.carousel:
