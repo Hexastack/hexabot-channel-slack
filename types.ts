@@ -1,3 +1,11 @@
+/*
+ * Copyright © 2024 Hexastack. All rights reserved.
+ *
+ * Licensed under the GNU Affero General Public License v3.0 (AGPLv3) with the following additional terms:
+ * 1. The name "Hexabot" is a trademark of Hexastack. You may not use this name in derivative works without express written permission.
+ * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
+ */
+
 export namespace Slack {
   export enum SettingLabel {
     access_token = 'access_token',
@@ -158,7 +166,7 @@ export namespace Slack {
     subtype?: string;
     actions?: Payload[]; //for payload events
     text?: string; // mtbh: in INcomingAttachement??
-    files?: Array<Files>; // mtbh: in INcomingAttachement??
+    files?: Array<File>; // mtbh: in INcomingAttachement??
 
     team?: string;
     blocks?: BlockObject[];
@@ -187,13 +195,13 @@ export namespace Slack {
 
   export interface IncomingAttachement extends Event {
     type: SlackType.incoming_message;
-    files: Array<Files>;
+    files: Array<File>;
     upload?: boolean;
     display_as_bot?: boolean;
     subtype: Slack.SubtypeEvent.file_share;
   }
 
-  export interface ImageFile extends Files {
+  export interface ImageFile extends File {
     original_h: number;
     original_w: number;
     thumb_tiny: string;
@@ -202,7 +210,7 @@ export namespace Slack {
     [key: `thumb_${number}_h`]: number;
   }
 
-  export interface TextFile extends Files {
+  export interface TextFile extends File {
     preview: string;
     preview_highlight: string;
     preview_is_truncated: boolean;
@@ -210,7 +218,7 @@ export namespace Slack {
     lines_more: number;
   }
 
-  export interface Files {
+  export interface File {
     created: number;
     display_as_bot?: boolean;
     edit_link?: string;

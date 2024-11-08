@@ -1,16 +1,24 @@
+/*
+ * Copyright © 2024 Hexastack. All rights reserved.
+ *
+ * Licensed under the GNU Affero General Public License v3.0 (AGPLv3) with the following additional terms:
+ * 1. The name "Hexabot" is a trademark of Hexastack. You may not use this name in derivative works without express written permission.
+ * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
+ */
+
 import { v4 as uuidv4 } from 'uuid';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import EventWrapper from '@/channel/lib/EventWrapper';
 import ChannelHandler from '@/channel/lib/Handler';
 import {
-  AttachmentPayload,
   AttachmentForeignKey,
+  AttachmentPayload,
   FileType,
 } from '@/chat/schemas/types/attachment';
 import {
-  StdEventType,
   IncomingMessageType,
+  StdEventType,
   StdIncomingMessage,
 } from '@/chat/schemas/types/message';
 import { Payload, PayloadType } from '@/chat/schemas/types/quick-reply';
@@ -77,7 +85,7 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   _init(event: Slack.Event): void {
-    //debugger;
+    ////debugger;
   }
 
   private _generateId(): string {
@@ -100,7 +108,7 @@ export default class SlackEventWrapper extends EventWrapper<
 
   getRecipientForeignId(): string {
     if (this.getEventType() === StdEventType.echo) return null;
-    //debugger;
+    ////debugger;
     return null;
   }
 
@@ -110,11 +118,11 @@ export default class SlackEventWrapper extends EventWrapper<
 
     if (msg.user == 'sails.settings.slack_user_id ???') {
       //TODO: to implement
-      //debugger;
+      ////debugger;
       throw new Error('Method not implemented.');
     }
     if (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id) {
-      debugger;
+      //debugger;
       return StdEventType.echo;
     }
 
@@ -134,7 +142,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   isQuickReplies(): boolean {
-    debugger;
     return (
       this._raw.original_message?.attachments?.[0]?.callback_id ===
       Slack.CallbackId.quick_replies
@@ -159,7 +166,7 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getPayload(): Payload | string | undefined {
-    //debugger;
+    ////debugger;
     if (this.getEventType() === StdEventType.message) {
       const eventType = this.getMessageType();
       switch (eventType) {
@@ -170,7 +177,7 @@ export default class SlackEventWrapper extends EventWrapper<
             (<Slack.Event>this._raw).files &&
             (<Slack.Event>this._raw).files[0]
           ) {
-            const attachment: Slack.Files = (<Slack.Event>this._raw).files[0];
+            const attachment: Slack.File = (<Slack.Event>this._raw).files[0];
             const mimetype: boolean | string = attachment.mimetype
               ? attachment.mimetype
               : /*mime.lookup(*/ attachment.url_private; /*)*/ //TODO: to implement
@@ -189,7 +196,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getMessage() {
-    //debugger;
     const type: IncomingMessageType = this.getMessageType();
     let message: StdIncomingMessage;
     const msg = <Slack.Event>this._raw;
@@ -208,7 +214,8 @@ export default class SlackEventWrapper extends EventWrapper<
         break;
 
       case IncomingMessageType.attachments:
-        const attachments: Array<Slack.Files> = (<Slack.Event>this._raw).files;
+        //debugger;
+        const attachments: Array<Slack.File> = (<Slack.Event>this._raw).files;
         let serialized_text: string = 'attachment:';
 
         const file_path = attachments[0].url_private;

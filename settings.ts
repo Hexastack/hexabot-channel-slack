@@ -1,16 +1,17 @@
-import { SettingCreateDto } from '@/setting/dto/setting.dto';
 import { SettingType } from '@/setting/schemas/types';
 
+import { ChannelSetting } from '@/channel/types';
 import { Slack } from './types';
 
-export const SLACK_CHANNEL_NAME = 'slack';
+export const SLACK_CHANNEL_NAME = 'slack-channel';
 
-export const DEFAULT_SLACK_SETTINGS: SettingCreateDto[] = [
+export const SLACK_GROUP_NAME = 'slack_channel';
+
+export default [
   {
-    group: SLACK_CHANNEL_NAME,
+    group: SLACK_GROUP_NAME,
     label: Slack.SettingLabel.access_token,
     value: '',
     type: SettingType.secret,
-    weight: 1,
   },
-];
+] as const satisfies ChannelSetting<typeof SLACK_CHANNEL_NAME>[];

@@ -1,15 +1,16 @@
-import * as fs from 'fs';
+/*
+ * Copyright © 2024 Hexastack. All rights reserved.
+ *
+ * Licensed under the GNU Affero General Public License v3.0 (AGPLv3) with the following additional terms:
+ * 1. The name "Hexabot" is a trademark of Hexastack. You may not use this name in derivative works without express written permission.
+ * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
+ */
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import { AttachmentService } from '@/attachment/services/attachment.service';
-import {
-  AttachmentForeignKey,
-  AttachmentPayload,
-  WithUrl,
-} from '@/chat/schemas/types/attachment';
+import { AttachmentPayload, WithUrl } from '@/chat/schemas/types/attachment';
 
 import { SlackApi } from './slack-api';
-import { Slack } from './types';
 
 export default class SlackFileUploader {
   constructor(
@@ -25,15 +26,17 @@ export default class SlackFileUploader {
       this.attachment.payload.size,
     );
     await this.uploadToSlack(upload_url);
-    await this.slackApi.CompleteUpload([{ id: file_id }], this.channel);
-    return file_id;
+    const files = await this.slackApi.CompleteUpload(
+      [{ id: file_id }],
+      this.channel,
+    );
+    return files;
   }
 
   private async uploadToSlack(uploadUrl: string) {
     const fileStream = await this.attachmentService.downloadAsBytes(
       this.attachment.payload,
     ); //fs.createReadStream(this.attachement.pa  yload.url);
-    debugger;
     await this.slackApi.uploadFile(uploadUrl, fileStream);
   }
 }

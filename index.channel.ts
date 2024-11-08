@@ -1,3 +1,11 @@
+/*
+ * Copyright © 2024 Hexastack. All rights reserved.
+ *
+ * Licensed under the GNU Affero General Public License v3.0 (AGPLv3) with the following additional terms:
+ * 1. The name "Hexabot" is a trademark of Hexastack. You may not use this name in derivative works without express written permission.
+ * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
+ */
+
 import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
@@ -9,65 +17,54 @@ import { AttachmentService } from '@/attachment/services/attachment.service';
 import { ChannelService } from '@/channel/channel.service';
 import EventWrapper from '@/channel/lib/EventWrapper';
 import ChannelHandler from '@/channel/lib/Handler';
+import { ChannelName } from '@/channel/types';
 import { SubscriberCreateDto } from '@/chat/dto/subscriber.dto';
 import { WithUrl } from '@/chat/schemas/types/attachment';
+import { ButtonType } from '@/chat/schemas/types/button';
 import {
-  Button,
-  ButtonType,
-  PostBackButton,
-  WebUrlButton,
-} from '@/chat/schemas/types/button';
-import {
-  StdOutgoingMessage,
-  StdOutgoingEnvelope,
   OutgoingMessageFormat,
-  StdOutgoingTextMessage,
-  StdOutgoingQuickRepliesMessage,
-  StdOutgoingButtonsMessage,
   StdOutgoingAttachmentMessage,
+  StdOutgoingButtonsMessage,
+  StdOutgoingEnvelope,
+  StdOutgoingMessage,
+  StdOutgoingQuickRepliesMessage,
+  StdOutgoingTextMessage,
 } from '@/chat/schemas/types/message';
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { LoggerService } from '@/logger/logger.service';
-import { NlpService } from '@/nlp/services/nlp.service';
-import { SettingCreateDto } from '@/setting/dto/setting.dto';
 import { Setting } from '@/setting/schemas/setting.schema';
 import { SettingService } from '@/setting/services/setting.service';
-import { blocks } from '@/utils/test/fixtures/block';
-import { SocketRequest } from '@/websocket/utils/socket-request';
-import { SocketResponse } from '@/websocket/utils/socket-response';
+import { THydratedDocument } from '@/utils/types/filter.types';
 
-import { DEFAULT_SLACK_SETTINGS, SLACK_CHANNEL_NAME } from './settings';
+import { SLACK_CHANNEL_NAME } from './settings';
 import { SlackApi } from './slack-api';
 import { Slack } from './types';
 import SlackFileUploader from './uploader';
 import SlackEventWrapper from './wrapper';
 
 @Injectable()
-export class SlackHandler extends ChannelHandler {
+export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   private api: SlackApi;
-
-  protected settings: SettingCreateDto[] = DEFAULT_SLACK_SETTINGS;
 
   constructor(
     settingService: SettingService,
     channelService: ChannelService,
-    nlpService: NlpService,
     logger: LoggerService,
     protected readonly eventEmitter: EventEmitter2,
     protected readonly httpService: HttpService,
     protected readonly settingsService: SettingService,
     protected readonly attachmentService: AttachmentService,
   ) {
-    super(settingService, channelService, nlpService, logger);
+    super('slack-channel', settingService, channelService, logger);
   }
 
-  getChannel(): string {
-    return SLACK_CHANNEL_NAME;
+  getPath(): string {
+    return __dirname;
   }
 
   async init(): Promise<void> {
     this.logger.debug('Slack Channel Handler: Initializing...');
-    const settings = await this.getSettings<Slack.Settings>();
+    const settings = await this.getSettings();
     this.api = new SlackApi(settings.access_token);
   }
 
@@ -129,7 +126,7 @@ export class SlackHandler extends ChannelHandler {
         };
         return format_btn;
       });
-      debugger;
+      //debugger;
       return {
         attachments: [
           {
@@ -170,12 +167,12 @@ export class SlackHandler extends ChannelHandler {
     options?: any,
     ...args: any
   ) {
-    debugger;
+    //debugger;
     const textSection = {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: 'This is a section block with a button.',
+        text: message.text,
       },
     };
     const elements = message.buttons.map((btn) => {
@@ -203,13 +200,12 @@ export class SlackHandler extends ChannelHandler {
         };
       }
     });
-    //.slice(0, 3); //TODO: why slice??
     return {
       blocks: [textSection, { type: 'actions', elements }],
-    };
+    }; /*
     const actions: Array<Slack.Button> = message.buttons
       .map((btn: Button) => {
-        debugger;
+        //debugger;
 
         let format_btn: Slack.Button;
         if ((<WebUrlButton>btn).url) {
@@ -235,12 +231,14 @@ export class SlackHandler extends ChannelHandler {
       attachments: [
         {
           text: message.text,
-          actions,
+          actions,>
           callback_id: 'slack_buttons_' + actions[0].value,
         },
       ],
-    };
+    };*/
   }
+
+  //TODO: get usersList
 
   async _attachmentFormat(
     message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
@@ -252,22 +250,27 @@ export class SlackHandler extends ChannelHandler {
       'U07PKPB6W2Y',
       this.attachmentService,
     );
-    const fileId = await fileUploader.upload();
+    const files = await fileUploader.upload(); //TODO: to make return an element instead of an array
+
+    //wait a little the time slack processes the upload
+    // TODO: is this the right approach?
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     return {
-      blocks: [{ type: 'text', text: 'This is an attachment' }] /*
-        {
+      blocks: files.map((file) => {
+        return {
           type: 'image',
           slack_file: {
-            id: fileId,
+            id: file.id,
           },
-          alt_text: 'heheh this is alt_text, // TODO: to remove',
-        },
-      ],*/,
+          alt_text: 'image',
+        };
+      }),
     };
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
-    debugger;
+    //debugger;
     return [];
     /*const fields = options.content.fields;
     const buttons = options.content.buttons;
@@ -343,12 +346,12 @@ export class SlackHandler extends ChannelHandler {
   }
 
   _listFormat(message: StdOutgoingMessage, options: any, ...args: any) {
-    debugger;
+    //debugger;
     throw new Error('Method not implemented.');
   }
 
   _carouselFormat(message: StdOutgoingMessage, options: any, ...args: any) {
-    debugger;
+    //debugger;
     throw new Error('Method not implemented.');
   }
 
@@ -358,7 +361,7 @@ export class SlackHandler extends ChannelHandler {
     options: any,
     context: any,
   ): Promise<{ mid: string }> {
-    debugger;
+    //debugger;
     const message = await this._formatMessage(envelope, options);
 
     await this.api.sendMessage(message, event.getSenderForeignId());
@@ -378,7 +381,7 @@ export class SlackHandler extends ChannelHandler {
   async getUserData(
     event: EventWrapper<any, any>,
   ): Promise<SubscriberCreateDto> {
-    //debugger;
+    ////debugger;
     const user = await this.api.getUserInfo(event.getSenderForeignId());
 
     const profile = user.profile;
@@ -390,7 +393,7 @@ export class SlackHandler extends ChannelHandler {
       timezone: Math.floor(user.tz_offset / 3600), //not sure
       gender: 'Unknown',
       channel: {
-        name: this.getChannel(),
+        name: this.getName() as ChannelName,
       },
       assignedAt: null,
       assignedTo: null,
@@ -407,7 +410,7 @@ export class SlackHandler extends ChannelHandler {
     envelope: StdOutgoingEnvelope,
     options: BlockOptions,
   ): Promise<any> {
-    //debugger;
+    ////debugger;
     //TODO: Why is this method not in ChannelHandler?
     //TODO: update return type
     switch (envelope.format) {
@@ -429,13 +432,9 @@ export class SlackHandler extends ChannelHandler {
     }
   }
 
-  @OnEvent('hook:setting:postUpdate')
-  async onAccessTokenUpdate(setting: Setting) {
-    if (
-      setting.group === SLACK_CHANNEL_NAME &&
-      setting.label === Slack.SettingLabel.access_token
-    ) {
-      this.api.setAccessToken(setting.value);
-    }
+  @OnEvent('hook:slack_channel:access_token') //Make the settings event more specific to slack channel
+  async updateAccessToken(setting: THydratedDocument<Setting>) {
+    this.logger.warn('Slack Api: access token updated'); //test access token
+    this.api.setAccessToken(setting.value);
   }
 }
