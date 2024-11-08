@@ -37,6 +37,8 @@ export default class SlackEventWrapper extends EventWrapper<
 > {
   _raw: Slack.Event;
 
+  eventType: StdEventType;
+
   /**
    * @param handker - The channel's handler
    * @param event - The event to wrap
@@ -84,9 +86,7 @@ export default class SlackEventWrapper extends EventWrapper<
     this._raw = data_event;
   }
 
-  _init(event: Slack.Event): void {
-    ////debugger;
-  }
+  _init(event: Slack.Event): void {}
 
   private _generateId(): string {
     return 'slack-' + uuidv4();
@@ -108,25 +108,26 @@ export default class SlackEventWrapper extends EventWrapper<
 
   getEventType(): StdEventType {
     //TODO: to test all the cases
-    //TODO: to optimize
-    const msg = this._raw;
-    if (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id) {
-      return StdEventType.echo;
+    if (!this.eventType) {
+      const msg = this._raw;
+      if (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id) {
+        this.eventType = StdEventType.echo;
+      } else if (
+        ((msg.type === Slack.SlackType.interactive_message ||
+          msg.type === Slack.SlackType.block_actions) &&
+          msg.actions[0].value !== 'url') ||
+        (msg.type == Slack.SlackType.incoming_message &&
+          ((msg.channel_type === 'channel' &&
+            msg.text &&
+            msg.text.includes('<@)' + 'sails.settings.slack_user_id' + '>')) ||
+            msg.channel_type === 'im'))
+      ) {
+        this.eventType = StdEventType.message;
+      } else {
+        this.eventType = StdEventType.unknown;
+      }
     }
-
-    if (
-      ((msg.type === Slack.SlackType.interactive_message ||
-        msg.type === Slack.SlackType.block_actions) &&
-        msg.actions[0].value !== 'url') ||
-      (msg.type == Slack.SlackType.incoming_message &&
-        ((msg.channel_type === 'channel' &&
-          msg.text &&
-          msg.text.includes('<@)' + 'sails.settings.slack_user_id' + '>')) ||
-          msg.channel_type === 'im'))
-    ) {
-      return StdEventType.message;
-    }
-    return StdEventType.unknown;
+    return this.eventType;
   }
 
   isQuickReplies(): boolean {
@@ -142,6 +143,9 @@ export default class SlackEventWrapper extends EventWrapper<
       -1
     ) {
       const msg = <Slack.Event>this._raw;
+      if (this.isQuickReplies()) {
+        return IncomingMessageType.quick_reply;
+      }
       if (msg.actions) {
         return IncomingMessageType.postback;
       } else if (msg.files && msg.files.length >= 1) {

@@ -69,7 +69,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   handle(req: Request, res: Response) {
-    debugger;
     this.logger.debug('Slack Channel Handler: Handling request...');
     const data = req.body;
 
@@ -116,25 +115,25 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   _quickRepliesFormat(message: StdOutgoingQuickRepliesMessage, options?: any) {
-      const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
-        const format_btn: Slack.Button = {
-          name: btn.title,
-          text: btn.title,
-          type: 'button',
-          value: btn.payload,
-        };
-        return format_btn;
-      });
-
-      return {
-        attachments: [
-          {
-            text: message.text,
-            actions,
-            callback_id: Slack.CallbackId.quick_replies,
-          },
-        ],
+    const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
+      const format_btn: Slack.Button = {
+        name: btn.title,
+        text: btn.title,
+        type: 'button',
+        value: btn.payload,
       };
+      return format_btn;
+    });
+
+    return {
+      attachments: [
+        {
+          text: message.text,
+          actions,
+          callback_id: Slack.CallbackId.quick_replies,
+        },
+      ],
+    };
   }
 
   _buttonsFormat(
