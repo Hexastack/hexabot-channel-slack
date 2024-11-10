@@ -126,7 +126,6 @@ export class SlackApi {
 
   async CompleteUpload(files: any, channel_id?: string): Promise<Slack.File[]> {
     //TODO: remove any
-
     return (
       await firstValueFrom(
         this.httpService.post(Slack.ApiEndpoint.completeUpload, {

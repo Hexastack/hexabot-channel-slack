@@ -28,12 +28,12 @@ import { Slack } from './types';
 type SlackEventAdapter = {
   eventType: StdEventType.unknown;
   messageType: never;
-  raw: Slack.BodyEvent;
+  raw: Slack.Event;
 };
 
 export default class SlackEventWrapper extends EventWrapper<
   SlackEventAdapter,
-  Slack.Event
+  Slack.BodyEvent
 > {
   _raw: Slack.Event;
 
@@ -45,6 +45,16 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   constructor(handler: ChannelHandler, data: Slack.BodyEvent) {
     debugger;
+    super(handler, data);
+    const channelData: Slack.ChannelData = { channel_id: this._raw.channel };
+    this.set('channelData', channelData);
+  }
+
+  _init(event: Slack.BodyEvent): void {
+    this._raw = this.parseEvent(event);
+  }
+
+  private parseEvent(data: Slack.BodyEvent): Slack.Event {
     let data_event: Slack.Event;
     if ((<Slack.IncomingEvent>data).event) {
       data_event = (<Slack.IncomingEvent>data).event;
@@ -82,12 +92,9 @@ export default class SlackEventWrapper extends EventWrapper<
         channel_type: 'im',
       } as Slack.Event;
     }
-    const channelData: Slack.ChannelData = { channel_id: data_event.channel };
-    super(handler, data_event, channelData);
-    this._raw = data_event;
-  }
 
-  _init(event: Slack.Event): void {}
+    return data_event;
+  }
 
   private _generateId(): string {
     return 'slack-' + uuidv4();
