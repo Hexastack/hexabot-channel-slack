@@ -70,6 +70,7 @@ export default class SlackEventWrapper extends EventWrapper<
         original_message: payload.original_message,
       };
     } else if ((<Slack.CommandEvent>data).command) {
+      //TODO: not tested
       //if the event is a slash command event
       const datac: Slack.CommandEvent = <Slack.CommandEvent>data;
       data_event = {
@@ -101,8 +102,8 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getRecipientForeignId(): string {
+    //TODO: to check
     if (this.getEventType() === StdEventType.echo) return null;
-    ////debugger;
     return null;
   }
 
@@ -162,7 +163,7 @@ export default class SlackEventWrapper extends EventWrapper<
     if (this.getEventType() === StdEventType.message) {
       const eventType = this.getMessageType();
       switch (eventType) {
-        case IncomingMessageType.postback:
+        case (IncomingMessageType.postback, IncomingMessageType.quick_reply):
           return (<Slack.Event>this._raw).actions[0].value;
         case IncomingMessageType.attachments:
           if (
@@ -187,7 +188,7 @@ export default class SlackEventWrapper extends EventWrapper<
     }
   }
 
-  getMessage() {
+  getMessage(): StdIncomingMessage {
     const type: IncomingMessageType = this.getMessageType();
     let message: StdIncomingMessage;
     const msg = <Slack.Event>this._raw;
@@ -198,7 +199,7 @@ export default class SlackEventWrapper extends EventWrapper<
         };
         break;
 
-      case IncomingMessageType.postback:
+      case (IncomingMessageType.postback, IncomingMessageType.quick_reply):
         message = {
           postback: msg.actions[0].name,
           text: msg.actions[0].value,
@@ -206,7 +207,6 @@ export default class SlackEventWrapper extends EventWrapper<
         break;
 
       case IncomingMessageType.attachments:
-        //debugger;
         const attachments: Array<Slack.File> = (<Slack.Event>this._raw).files;
         let serialized_text: string = 'attachment:';
 

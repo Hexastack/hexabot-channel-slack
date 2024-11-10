@@ -7,15 +7,9 @@
  */
 
 export namespace Slack {
-  export enum SettingLabel {
-    access_token = 'access_token',
-  }
-
   export type ChannelData = {
     channel_id: string;
   };
-
-  export type Settings = Record<SettingLabel, any>;
 
   export enum SlackType { //TODO: to update https://api.slack.com/apis/events-api#event_type_structure
     app_home_opened = 'app_home_opened',
@@ -422,22 +416,48 @@ export namespace Slack {
    */
 
   export type KnownBlock =
+    | ContextBlock
     | ImageBlock
     | ActionsBlock
     | DividerBlock
     | SectionBlock
-    | FileBlock;
+    | FileBlock
+    | HeaderBlock
+    | InputBlock
+    | RichTextBlock;
+  //| VideoBlock
 
   export interface Block {
     type: string;
     block_id?: string;
   }
 
-  export interface ImageBlock extends Block {
+  export interface ContextBlock extends Block {
+    type: 'context';
+    elements: (PlainTextElement | MrkdwnElement | ImageElement)[];
+  }
+
+  export interface HeaderBlock extends Block {
+    type: 'header';
+    text: PlainTextElement;
+  }
+
+  export type ImageBlock = ImageBlockWithUrl | ImageBlockWithSlackFile;
+
+  export interface ImageBlockBase extends Block {
     type: 'image';
-    image_url: string;
     alt_text: string;
     title?: PlainTextElement;
+  }
+
+  export interface ImageBlockWithUrl extends ImageBlockBase {
+    image_url: string;
+    slack_file?: never;
+  }
+
+  export interface ImageBlockWithSlackFile extends ImageBlockBase {
+    image_url?: never;
+    slack_file: SlackFile;
   }
 
   export interface ActionsBlock extends Block {
@@ -454,6 +474,7 @@ export namespace Slack {
     text?: PlainTextElement | MrkdwnElement; // either this or fields must be defined
     fields?: (PlainTextElement | MrkdwnElement)[]; // either this or text must be defined
     accessory?: Button | Action | ImageElement;
+    expand?: boolean;
   }
 
   export interface FileBlock extends Block {
@@ -461,6 +482,22 @@ export namespace Slack {
     source: string; // 'remote'
     external_id: string;
   }
+
+  export interface InputBlock extends Block {
+    type: 'input';
+    label: PlainTextElement;
+    element: any; //TODO: block element https://api.slack.com/reference/block-kit/block-elements
+    dispatch_action?: boolean;
+    hint?: PlainTextElement;
+    optional?: boolean;
+  }
+
+  export interface RichTextBlock extends Block {
+    type: 'rich_text';
+    elements: any[]; //TODO: replace any with rich text elements: https://api.slack.com/reference/block-kit/blocks#rich_fields
+  }
+
+  export type SlackFile = { id: string } | { url: string };
 
   export interface MessageAttachment {
     blocks?: (KnownBlock | Block)[];

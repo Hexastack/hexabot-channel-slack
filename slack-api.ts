@@ -12,17 +12,27 @@ import axios from 'axios';
 import { firstValueFrom } from 'rxjs';
 
 import { Slack } from './types';
+import { verifySlackRequest } from './verify-request';
 
 export class SlackApi {
   private httpService: HttpService;
 
   //TODO: handle api errors
-  constructor(access_token: string) {
+  constructor(
+    access_token: string,
+    private signing_secret: string,
+  ) {
     this.buildHttpService(access_token);
   }
 
   setAccessToken(access_token: string) {
+    Logger.verbose('Access token updated', 'Slack Api');
     this.buildHttpService(access_token);
+  }
+
+  setSigningSecret(signing_secret: string) {
+    Logger.verbose('Signing secret updated', 'Slack Api');
+    this.signing_secret = signing_secret;
   }
 
   private buildHttpService(access_token: string) {
@@ -55,15 +65,31 @@ export class SlackApi {
     this.httpService = new HttpService(axiosInstance);
   }
 
+  public verifySignature(req: any) {
+    try {
+      verifySlackRequest({
+        signingSecret: this.signing_secret,
+        //body: req.body,// take the raw body instead
+        body: req.rawBody,
+        headers: {
+          'x-slack-signature': req.headers['x-slack-signature'],
+          'x-slack-request-timestamp': req.headers['x-slack-request-timestamp'],
+        },
+      });
+      return true;
+    } catch (e) {
+      Logger.error(e, 'Error: Slack Api');
+    }
+  }
+
   async getUserInfo(userForeingId: string): Promise<any> {
-    //debugger;
-    const temp = await firstValueFrom(
-      this.httpService.get(Slack.ApiEndpoint.usersInfo, {
-        params: { user: userForeingId },
-      }),
-    );
-    //debugger;
-    return temp.data.user;
+    return (
+      await firstValueFrom(
+        this.httpService.get(Slack.ApiEndpoint.usersInfo, {
+          params: { user: userForeingId },
+        }),
+      )
+    ).data.user;
   }
 
   async sendMessage(message: any, channel) {
@@ -89,34 +115,33 @@ export class SlackApi {
   }
 
   async uploadFile(uploadUrl: string, buffer: Buffer) {
-    const res = await firstValueFrom(
+    return await firstValueFrom(
       this.httpService.post(uploadUrl, buffer, {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
       }),
     );
-    //debugger;
-    return res; //TODO: to remove the res variable.
   }
 
   async CompleteUpload(files: any, channel_id?: string): Promise<Slack.File[]> {
     //TODO: remove any
-    //debugger;
-    const a = await firstValueFrom(
-      this.httpService.post(Slack.ApiEndpoint.completeUpload, {
-        channel_id,
-        files,
-      }),
-    );
-    return a.data.files;
+
+    return (
+      await firstValueFrom(
+        this.httpService.post(Slack.ApiEndpoint.completeUpload, {
+          channel_id,
+          files,
+        }),
+      )
+    ).data.files;
   }
 
   async sendResponse(message: any, responseUrl: string) {
     try {
       await axios.post(responseUrl, message);
     } catch (e) {
-      Logger.error('Slack Api: Error sending response', e);
+      Logger.error(e, 'Error: Slack Api');
     }
   }
 }

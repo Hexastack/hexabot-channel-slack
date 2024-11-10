@@ -26,7 +26,7 @@ import {
   StdOutgoingAttachmentMessage,
   StdOutgoingButtonsMessage,
   StdOutgoingEnvelope,
-  StdOutgoingMessage,
+  StdOutgoingListMessage,
   StdOutgoingQuickRepliesMessage,
   StdOutgoingTextMessage,
 } from '@/chat/schemas/types/message';
@@ -65,23 +65,25 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   async init(): Promise<void> {
     this.logger.debug('Slack Channel Handler: Initializing...');
     const settings = await this.getSettings();
-    this.api = new SlackApi(settings.access_token);
+    this.api = new SlackApi(settings.access_token, settings.signing_secret);
   }
 
   handle(req: Request, res: Response) {
     this.logger.debug('Slack Channel Handler: Handling request...');
     const data = req.body;
 
-    console.log('SlackHandler.handle called, data: ', data); //TODO: to remove
     if (data.type && data.type === 'url_verification') {
       this.logger.debug('Slack Channel Handler: Handling url_verification...');
       return res.status(200).send(data.challenge);
     }
 
+    if (!this.api.verifySignature(req)) return; // TODO: maybe handle this in a middleware
+
     try {
       const event = new SlackEventWrapper(this, data);
       event.set('mid', this._generateId());
       const type = event.getEventType();
+
       if (event.isQuickReplies()) {
         this.editQuickRepliesSourceMessage(event);
       }
@@ -108,13 +110,19 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return 'slack-' + uuidv4();
   }
 
-  _textFormat(message: StdOutgoingTextMessage, options?: any) {
+  _textFormat(
+    message: StdOutgoingTextMessage,
+    options?: any,
+  ): Slack.OutgoingMessage {
     return {
       text: message.text,
     };
   }
 
-  _quickRepliesFormat(message: StdOutgoingQuickRepliesMessage, options?: any) {
+  _quickRepliesFormat(
+    message: StdOutgoingQuickRepliesMessage,
+    options?: any,
+  ): Slack.OutgoingMessage {
     const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
       const format_btn: Slack.Button = {
         name: btn.title,
@@ -140,16 +148,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     message: StdOutgoingButtonsMessage,
     options?: any,
     ...args: any
-  ) {
+  ): Slack.OutgoingMessage {
     //debugger;
-    const textSection = {
+    const textSection: Slack.SectionBlock = {
       type: 'section',
       text: {
         type: 'mrkdwn',
         text: message.text,
       },
     };
-    const elements = message.buttons.map((btn) => {
+    const elements: Slack.Button[] = message.buttons.map((btn) => {
       // TODO: handle non compact urls with link unfurling: https://api.slack.com/reference/messaging/link-unfurling#event_deliveries
       if (btn.type === ButtonType.web_url) {
         return {
@@ -218,7 +226,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
     channel: string,
     options?: any,
-  ) {
+  ): Promise<Slack.OutgoingMessage> {
     const fileUploader = new SlackFileUploader(
       this.api,
       message.attachment,
@@ -236,12 +244,10 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   _formatElements(data: any[], options: any, ...args: any): any[] {
-    //debugger;
-    return [];
-    /*const fields = options.content.fields;
+    const fields = options.content.fields;
     const buttons = options.content.buttons;
     //To build a list :
-    const blocks: Array<Slack.KnownBlock> = [{ type: 'divider' }];
+    const blocks: Slack.KnownBlock[] = [{ type: 'divider' }];
     data.forEach((item) => {
       const text = item[fields.subtitle]
         ? '*' + item[fields.title] + '*\n' + item[fields.subtitle]
@@ -263,7 +269,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       blocks.push(main_block);
       //Array of elements : Buttons
       const elements = [];
-      buttons.forEach((button: Button, index) => {
+      buttons.forEach((button, index) => {
         const btn = { ...button };
         // Set custom title for first button if provided
         if (index === 0 && fields.action_title && item[fields.action_title]) {
@@ -289,7 +295,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           });
         } else {
           //button without url
-          btn.payload = btn.title + ':' + item.getPayload();
+          btn.payload = btn.title + ':' + 'payload //TODO: to remove'; //item.getPayload();
           elements.push({
             type: 'button',
             text: {
@@ -308,23 +314,64 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       blocks.push({ type: 'divider' });
     });
     return blocks;
-  */
   }
 
-  _listFormat(message: StdOutgoingMessage, options: any, ...args: any) {
-    //debugger;
-    throw new Error('Method not implemented.');
+  _listFormat(
+    message: StdOutgoingListMessage,
+    options: any,
+    ...args: any
+  ): Slack.OutgoingMessage {
+    debugger;
+    const data = message.elements || [];
+    const pagination = message.pagination;
+    let buttons: Slack.ActionsBlock = {
+        type: 'actions',
+        elements: [],
+      },
+      elements: Array<Slack.KnownBlock> = [];
+
+    // Items count min check
+    if (data.length < 0) {
+      this.logger.error(
+        'Slack Channel Handler : Unsufficient content count (must be >= 1 for list)',
+      );
+      throw new Error('Unsufficient content count (list >= 1)');
+    }
+    elements = this._formatElements(data, options);
+    //Adding the block of VIEW_MORE:
+    if (pagination.total - pagination.skip - pagination.limit > 0) {
+      buttons = {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View More',
+              emoji: true,
+            },
+            value: 'VIEW_MORE',
+          },
+        ],
+      };
+      elements.push(buttons);
+    }
+
+    return { blocks: elements };
   }
 
-  _carouselFormat(message: StdOutgoingMessage, options: any, ...args: any) {
-    //debugger;
-    throw new Error('Method not implemented.');
+  _carouselFormat(
+    message: StdOutgoingListMessage,
+    options: any,
+    ...args: any
+  ): Slack.OutgoingMessage {
+    return this._listFormat(message, options);
   }
 
   async sendMessage(
     event: EventWrapper<any, any>,
     envelope: StdOutgoingEnvelope,
-    options: any,
+    options: BlockOptions,
     context: any,
   ): Promise<{ mid: string }> {
     debugger;
@@ -379,7 +426,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     envelope: StdOutgoingEnvelope,
     channel: string,
     options: BlockOptions,
-  ): Promise<any> {
+  ): Promise<Slack.OutgoingMessage> {
     ////debugger;
     //TODO: Why is this method not in ChannelHandler?
     //TODO: update return type
@@ -404,7 +451,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
   @OnEvent('hook:slack_channel:access_token') //Make the settings event more specific to slack channel
   async updateAccessToken(setting: THydratedDocument<Setting>) {
-    this.logger.warn('Slack Api: access token updated'); //test access token
     this.api.setAccessToken(setting.value);
+  }
+
+  @OnEvent('hook:slack_channel:signing_secret')
+  async updateSigningSecret(setting: THydratedDocument<Setting>) {
+    this.api.setSigningSecret(setting.value);
   }
 }
