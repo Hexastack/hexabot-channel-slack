@@ -143,4 +143,13 @@ export class SlackApi {
       Logger.error(e, 'Error: Slack Api');
     }
   }
+
+  async publishHomeTab(view: Slack.HomeTabView, user_id: string) {
+    return await firstValueFrom(
+      this.httpService.post(Slack.ApiEndpoint.publishHomeTab, {
+        view,
+        user_id,
+      }),
+    );
+  }
 }

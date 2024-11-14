@@ -571,4 +571,26 @@ export namespace Slack {
     upload_url: string;
     file_id: string;
   };
+
+  export type HomeTabView = {
+    type: 'home';
+    blocks: KnownBlock[];
+    private_metadata?: string;
+    callback_id?: string;
+    external_id?: string;
+  };
+
+  export type ModalView = {
+    type: 'modal';
+    title: PlainTextElement;
+    blocks: KnownBlock[];
+    close: PlainTextElement;
+    submit: PlainTextElement;
+    private_metadata?: string;
+    callback_id?: string;
+    clear_on_close?: boolean;
+    notify_on_close?: boolean;
+    external_id?: string;
+    submit_disabled?: boolean;
+  };
 }

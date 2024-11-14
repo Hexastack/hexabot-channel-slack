@@ -31,6 +31,8 @@ import {
   StdOutgoingTextMessage,
 } from '@/chat/schemas/types/message';
 import { BlockOptions } from '@/chat/schemas/types/options';
+import { MenuTree, MenuType } from '@/cms/schemas/types/menu';
+import { MenuService } from '@/cms/services/menu.service';
 import { LoggerService } from '@/logger/logger.service';
 import { Setting } from '@/setting/schemas/setting.schema';
 import { SettingService } from '@/setting/services/setting.service';
@@ -54,6 +56,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     protected readonly httpService: HttpService,
     protected readonly settingsService: SettingService,
     protected readonly attachmentService: AttachmentService,
+    protected readonly menuService: MenuService,
   ) {
     super('slack-channel', settingService, channelService, logger);
   }
@@ -62,6 +65,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return __dirname;
   }
 
+  /**
+   * Logs a debug message indicating the initialization of the Slack Channel Handler
+   */
   async init(): Promise<void> {
     this.logger.debug('Slack Channel Handler: Initializing...');
     const settings = await this.getSettings();
@@ -82,12 +88,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     try {
       const event = new SlackEventWrapper(this, data);
       event.set('mid', this._generateId());
-      const type = event.getEventType();
-
+      debugger;
       if (event.isQuickReplies()) {
         this.editQuickRepliesSourceMessage(event);
       }
+      if ((event._raw.type = Slack.SlackType.app_home_opened)) {
+        this.handleAppHomeOpened(event._raw as Slack.AppHomeOpened);
+        return res.status(200).send('');
+      }
 
+      const type = event.getEventType();
       if (type) {
         this.eventEmitter.emit('hook:chatbot:' + type, event);
       } else {
@@ -103,6 +113,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       );
     }
     return res.status(200).send('');
+  }
+
+  handleAppHomeOpened(_raw: Slack.AppHomeOpened) {
+    if (_raw.tab === 'home') {
+      this._setHomeTab();
+    }
   }
 
   //TODO: duplicate method
@@ -184,40 +200,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     });
     return {
       blocks: [textSection, { type: 'actions', elements }],
-    }; /*
-    const actions: Array<Slack.Button> = message.buttons
-      .map((btn: Button) => {
-        //debugger;
-
-        let format_btn: Slack.Button;
-        if ((<WebUrlButton>btn).url) {
-          format_btn = {
-            name: btn.title,
-            text: btn.title,
-            type: 'button',
-            value: 'url',
-            url: (<WebUrlButton>btn).url,
-          };
-        } else {
-          format_btn = {
-            name: btn.title,
-            text: btn.title,
-            type: 'button',
-            value: (<PostBackButton>btn).payload,
-          };
-        }
-        return format_btn;
-      })
-      .slice(0, 3);
-    return {
-      attachments: [
-        {
-          text: message.text,
-          actions,>
-          callback_id: 'slack_buttons_' + actions[0].value,
-        },
-      ],
-    };*/
+    };
   }
 
   //TODO: get usersList
@@ -260,6 +243,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           text,
         },
       };
+
       if (item[fields.image_url])
         main_block.accessory = {
           type: 'image',
@@ -276,9 +260,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           btn.title = item[fields.action_title];
         }
         if (button.type === 'web_url') {
-          // Get built-in or an external URL from custom field
+          // Get built-in or an exter nal URL from custom field
           const urlField = fields.url;
-          btn.url = urlField && item[urlField] ? item[urlField] : item.getUrl();
+          btn.url = urlField && item[urlField] ? item[urlField] : '';
           if (!btn.url.startsWith('http')) {
             btn.url = 'https://' + btn.url;
           }
@@ -295,6 +279,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           });
         } else {
           //button without url
+          debugger;
           btn.payload = btn.title + ':' + 'payload //TODO: to remove'; //item.getPayload();
           elements.push({
             type: 'button',
@@ -447,6 +432,135 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       default:
         throw new Error('Unknown message format');
     }
+  }
+
+  async _setHomeTab() {
+    const menuTree = await this.menuService.getTree();
+    const tempUserId = 'U07PKPB6W2Y'; //TODO: to remove
+    this.api.publishHomeTab(this.formatMenu(menuTree), tempUserId);
+  }
+
+  formatMenu(menuTree: MenuTree): Slack.HomeTabView {
+    return {
+      type: 'home',
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: 'Hexabot',
+            emoji: true,
+          },
+        },
+
+        {
+          type: 'divider',
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: 'Welcome to *Hexabot!*\n',
+          },
+        },
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: 'Menu:',
+            emoji: true,
+          },
+        },
+
+        ...this.formatMenuBlocks(menuTree),
+      ],
+      callback_id: 'Persistent_menu',
+    };
+  }
+
+  formatMenuBlocks(menuTree: MenuTree, level: number = 0): Slack.KnownBlock[] {
+    debugger;
+
+    const blocks = menuTree.reduce((acc, item) => {
+      acc.push({
+        type: 'divider',
+      });
+      if (item.type === MenuType.postback) {
+        acc.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              '> ' +
+              '                   '.repeat(level) +
+              '*' +
+              item.title +
+              '*',
+          },
+          accessory: {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Select',
+            },
+            value: item.payload,
+          },
+        });
+      }
+      if (item.type === MenuType.web_url) {
+        acc.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              '> ' +
+              '                   '.repeat(level) +
+              '*' +
+              item.title +
+              '*',
+          },
+          accessory: {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'Visit',
+            },
+
+            url: item.url,
+          },
+        });
+      }
+      if (item.type === MenuType.nested) {
+        // call the function recursively
+        acc.push(
+          /*{
+            type: 'divider',
+          },*/
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+
+              text:
+                '> ' +
+                '                   '.repeat(level) +
+                '*' +
+                item.title +
+                ':*',
+            },
+          },
+          {
+            type: 'divider',
+          },
+          ...this.formatMenuBlocks(item.call_to_actions, level + 1),
+          {
+            type: 'divider',
+          },
+        );
+      }
+      return acc;
+    }, []);
+    return blocks;
   }
 
   @OnEvent('hook:slack_channel:access_token') //Make the settings event more specific to slack channel

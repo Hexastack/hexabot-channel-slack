@@ -67,7 +67,7 @@ export default class SlackEventWrapper extends EventWrapper<
       ) as Slack.IncomingPayload;
       data_event = {
         actions: payload.actions,
-        channel: payload.channel.id,
+        channel: payload.channel?.id,
         type: payload.type,
         client_msg_id: payload.message_ts,
         user: payload.user.id,
