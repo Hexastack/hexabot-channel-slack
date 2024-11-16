@@ -168,7 +168,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     options?: any,
     ...args: any
   ): Slack.OutgoingMessage {
-    //debugger;
     const textSection: Slack.SectionBlock = {
       type: 'section',
       text: {
@@ -282,7 +281,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           });
         } else {
           //button without url
-          debugger;
           btn.payload = btn.title + ':' + 'payload //TODO: to remove'; //item.getPayload();
           elements.push({
             type: 'button',
@@ -309,7 +307,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     options: any,
     ...args: any
   ): Slack.OutgoingMessage {
-    debugger;
     const data = message.elements || [];
     const pagination = message.pagination;
     let buttons: Slack.ActionsBlock = {
@@ -362,7 +359,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     options: BlockOptions,
     context: any,
   ): Promise<{ mid: string }> {
-    debugger;
     const channel = (event._profile.channel as any).channel_id; //TODO: remove the any
     const message = await this._formatMessage(envelope, channel, options);
 
@@ -389,7 +385,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     const user = await this.api.getUserInfo(event.getSenderForeignId());
 
     const defautLanguage = await this.languageService.getDefaultLanguage();
-    debugger;
+
     this.uploadProfilePicture(user);
     const profile = user.profile;
 
@@ -441,9 +437,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     channel: string,
     options: BlockOptions,
   ): Promise<Slack.OutgoingMessage> {
-    ////debugger;
-    //TODO: Why is this method not in ChannelHandler?
-    //TODO: update return type
     switch (envelope.format) {
       case OutgoingMessageFormat.attachment:
         return await this._attachmentFormat(envelope.message, channel, options);
@@ -508,8 +501,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   formatMenuBlocks(menuTree: MenuTree, level: number = 0): Slack.KnownBlock[] {
-    debugger;
-
     const blocks = menuTree.reduce((acc, item) => {
       acc.push({
         type: 'divider',

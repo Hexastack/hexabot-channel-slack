@@ -118,7 +118,10 @@ export default class SlackEventWrapper extends EventWrapper<
     //TODO: to test all the cases
     if (!this.eventType) {
       const msg = this._raw;
-      if (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id) {
+      if (
+        msg.bot_id //|| (msg.app_id && msg.app_id && msg.app_id === msg.api_app_id)
+      ) {
+        debugger;
         this.eventType = StdEventType.echo;
       } else if (
         ((msg.type === Slack.SlackType.interactive_message ||
