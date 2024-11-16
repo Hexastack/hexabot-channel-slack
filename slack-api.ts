@@ -82,14 +82,16 @@ export class SlackApi {
     }
   }
 
-  async getUserInfo(userForeingId: string): Promise<any> {
+  async getUserInfo(userForeingId: string): Promise<Slack.User> {
     return (
-      await firstValueFrom(
-        this.httpService.get(Slack.ApiEndpoint.usersInfo, {
-          params: { user: userForeingId },
-        }),
-      )
-    ).data.user;
+      (
+        await firstValueFrom(
+          this.httpService.get(Slack.ApiEndpoint.usersInfo, {
+            params: { user: userForeingId },
+          }),
+        )
+      ).data as Slack.UsersInfoResponse
+    ).user;
   }
 
   async sendMessage(message: any, channel) {

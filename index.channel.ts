@@ -10,6 +10,7 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { Request, Response } from 'express';
+import fetch from 'node-fetch';
 import { v4 as uuidv4 } from 'uuid';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
@@ -33,6 +34,7 @@ import {
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { MenuTree, MenuType } from '@/cms/schemas/types/menu';
 import { MenuService } from '@/cms/services/menu.service';
+import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
 import { Setting } from '@/setting/schemas/setting.schema';
 import { SettingService } from '@/setting/services/setting.service';
@@ -57,6 +59,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     protected readonly settingsService: SettingService,
     protected readonly attachmentService: AttachmentService,
     protected readonly menuService: MenuService,
+    protected readonly languageService: LanguageService,
   ) {
     super('slack-channel', settingService, channelService, logger);
   }
@@ -92,7 +95,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       if (event.isQuickReplies()) {
         this.editQuickRepliesSourceMessage(event);
       }
-      if ((event._raw.type = Slack.SlackType.app_home_opened)) {
+      if (event._raw.type === Slack.SlackType.app_home_opened) {
         this.handleAppHomeOpened(event._raw as Slack.AppHomeOpened);
         return res.status(200).send('');
       }
@@ -385,7 +388,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ): Promise<SubscriberCreateDto> {
     const user = await this.api.getUserInfo(event.getSenderForeignId());
 
+    const defautLanguage = await this.languageService.getDefaultLanguage();
+    debugger;
+    this.uploadProfilePicture(user);
     const profile = user.profile;
+
     return {
       foreign_id: user.id,
       first_name:
@@ -400,11 +407,33 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       assignedTo: null,
       labels: [],
       locale: 'en', //TODO: to check
-      language: 'en', //TODO: to check
+      language: defautLanguage.code,
       country: '',
       lastvisit: new Date(),
       retainedFrom: new Date(),
     };
+  }
+
+  uploadProfilePicture(user: Slack.User) {
+    //get the image_* with the highest resolution
+    const imageAttribute = Object.keys(user.profile)
+      .filter((key) => key.startsWith('image_'))
+      .map((key) => parseInt(key.split('_')[1]))
+      .filter((key) => !isNaN(key))
+      .reduce((acc, curr) => (acc > curr ? acc : curr), 0);
+    const imageUrl = user.profile['image_' + imageAttribute];
+
+    if (!imageUrl) return;
+    fetch(imageUrl, {})
+      .then((res) => {
+        this.attachmentService.uploadProfilePic(res, user.id + '.jpeg');
+      })
+      .catch((err) => {
+        this.logger.error(
+          'Slack Channel Handler Error downloading profile picture',
+          err,
+        );
+      });
   }
 
   async _formatMessage(

@@ -33,6 +33,7 @@ export namespace Slack {
     chatPostMessage = 'chat.postMessage',
     getUploadURL = 'files.getUploadURLExternal',
     completeUpload = 'files.completeUploadExternal',
+    publishHomeTab = 'views.publish',
   }
 
   export enum CallbackId {
@@ -172,6 +173,10 @@ export namespace Slack {
     attachments?: MessageAttachment[];
     channel_type?: 'im' | 'mpim' | 'private' | 'public' | 'channel';
   }
+
+  /*export enum SstdEventType   extends StdEventType{
+
+  }*/
 
   export enum SubtypeEvent { //TODmtbh: in INcomingAttachement??O: add more subtypes (like "message_replied")
     echo_message = 'bot_message',
