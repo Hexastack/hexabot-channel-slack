@@ -32,6 +32,11 @@ export function verifySlackRequest(
 ): void {
   const requestTimestampSec = options.headers['x-slack-request-timestamp'];
   const signature = options.headers['x-slack-signature'];
+
+  if (!requestTimestampSec || !signature) {
+    throw new Error(`${verifyErrorPrefix}: missing signature headers`);
+  }
+
   if (Number.isNaN(requestTimestampSec)) {
     throw new Error(
       `${verifyErrorPrefix}: header x-slack-request-timestamp did not have the expected type (${requestTimestampSec})`,

@@ -9,7 +9,7 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import fetch from 'node-fetch';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -61,7 +61,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     protected readonly menuService: MenuService,
     protected readonly languageService: LanguageService,
   ) {
-    super('slack-channel', settingService, channelService, logger);
+    super(SLACK_CHANNEL_NAME, settingService, channelService, logger);
   }
 
   getPath(): string {
@@ -77,21 +77,27 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     this.api = new SlackApi(settings.access_token, settings.signing_secret);
   }
 
+  /**
+   * Processes the incoming request from Slack
+   *
+   * @param req - The HTTP request object
+   * @param res - The HTTP response object
+   * @returns
+   */
   handle(req: Request, res: Response) {
+    debugger;
     this.logger.debug('Slack Channel Handler: Handling request...');
     const data = req.body;
 
+    // Handle url_verification for Slack API, return the challenge value
     if (data.type && data.type === 'url_verification') {
       this.logger.debug('Slack Channel Handler: Handling url_verification...');
       return res.status(200).send(data.challenge);
     }
 
-    if (!this.api.verifySignature(req)) return; // TODO: maybe handle this in a middleware
-
     try {
       const event = new SlackEventWrapper(this, data);
       event.set('mid', this._generateId());
-      debugger;
       if (event.isQuickReplies()) {
         this.editQuickRepliesSourceMessage(event);
       }
@@ -102,7 +108,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
       const type = event.getEventType();
       if (type) {
-        this.eventEmitter.emit('hook:chatbot:' + type, event);
+        this.eventEmitter.emit(`hook:chatbot:${type}`, event);
       } else {
         this.logger.error(
           'Slack Channel Handler: Webhook received unknown event',
@@ -118,17 +124,23 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return res.status(200).send('');
   }
 
-  handleAppHomeOpened(_raw: Slack.AppHomeOpened) {
-    if (_raw.tab === 'home') {
-      this._setHomeTab();
-    }
-  }
-
-  //TODO: duplicate method
+  /**
+   * Generates a unique ID for the Slack Channel Handler
+   * 
+   * @returns {string} - A unique ID
+   
+  */
   private _generateId(): string {
     return 'slack-' + uuidv4();
   }
 
+  /**
+   * Formats a text message that will be sent to Slack
+   *
+   * @param message - A text to be sent to the end user
+   * @param options - might contain additional settings
+   * @returns - A formatted text message understandable by Slack
+   */
   _textFormat(
     message: StdOutgoingTextMessage,
     options?: any,
@@ -138,6 +150,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     };
   }
 
+  /**
+   * Format a text + quick replies message that can be sent to Slack
+   *
+   * @param message - A text + quick replies to be sent to the end user
+   * @param options - might contain additional settings
+   * @returns -A formatted quick replies message understandable by Slack
+   */
   _quickRepliesFormat(
     message: StdOutgoingQuickRepliesMessage,
     options?: any,
@@ -163,6 +182,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     };
   }
 
+  /**
+   * From raw buttons, construct a slack understandable message containing those buttons
+   *
+   * @param message - A text + buttons to be sent to the end user
+   * @param options - Might contain additional settings
+   * @returns - A formatted buttons message understandable by Slack
+   */
   _buttonsFormat(
     message: StdOutgoingButtonsMessage,
     options?: any,
@@ -207,6 +233,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
   //TODO: get usersList
 
+  //This method will return undefined if the quick replies are not present
+
+  /**
+   * Uploads the attachment file to Slack and formats the quick replies if present
+   *
+   * @param message - An attachement + quick replies to be sent to the end user
+   * @param channel - The slack channels to send the message to, separated by commas
+   * @param options - Might contain additional settings
+   * @returns
+   */
   async _attachmentFormat(
     message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
     channel: string,
@@ -228,6 +264,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return undefined;
   }
 
+  /**
+   * Formats a collection of elements to be sent to Slack in carousel/list format
+   *
+   * @param data - A list of data items to be sent to the end user
+   * @param options - Might contain additional settings
+   * @returns - A Blocks array of Slack elements
+   */
   _formatElements(data: any[], options: any, ...args: any): any[] {
     const fields = options.content.fields;
     const buttons = options.content.buttons;
@@ -302,6 +345,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return blocks;
   }
 
+  /**
+   * Formats a list message that can be sent to Slack
+   *
+   * @param message - Contains elements to be sent to the end user
+   * @param options - Might contain additional settings
+   * @returns - A ready to be sent list template message in the format required by Slack
+   */
   _listFormat(
     message: StdOutgoingListMessage,
     options: any,
@@ -345,6 +395,17 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return { blocks: elements };
   }
 
+  /**
+   * Formats a carousel message that can be sent to Slack
+   *
+   *    NOTE: Carousel is not supported by Slack
+   *
+   *    This method will return a list message instead
+   *
+   * @param message - Contains elements to be sent to the end user
+   * @param options - Might contain additional settings
+   * @returns - A carousel ready to be sent in the format required by Slack
+   */
   _carouselFormat(
     message: StdOutgoingListMessage,
     options: any,
@@ -352,6 +413,48 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ): Slack.OutgoingMessage {
     return this._listFormat(message, options);
   }
+
+  /**
+   * Formats a message to be sent to Slack
+   *
+   * @param envelope - The message to be sent {format, message}
+   * @param channel - The slack channel to send the message to
+   * @param options - Might contain additional settings
+   * @returns - The formatted message in the format required by Slack
+   */
+  async _formatMessage(
+    envelope: StdOutgoingEnvelope,
+    channel: string,
+    options: BlockOptions,
+  ): Promise<Slack.OutgoingMessage> {
+    switch (envelope.format) {
+      case OutgoingMessageFormat.attachment:
+        return await this._attachmentFormat(envelope.message, channel, options);
+      case OutgoingMessageFormat.buttons:
+        return this._buttonsFormat(envelope.message, options);
+      case OutgoingMessageFormat.carousel:
+        return this._carouselFormat(envelope.message, options);
+      case OutgoingMessageFormat.list:
+        return this._listFormat(envelope.message, options);
+      case OutgoingMessageFormat.quickReplies:
+        return this._quickRepliesFormat(envelope.message, options);
+      case OutgoingMessageFormat.text:
+        return this._textFormat(envelope.message, options);
+
+      default:
+        throw new Error('Unknown message format');
+    }
+  }
+
+  /**
+   * Sends a Slack message to the end user
+   *
+   * @param event - Incoming event/message being responded to
+   * @param envelope - The message to be sent {format, message}
+   * @param options - Might contain additional settings
+   * @param context - Contextual data
+   * @returns - The message ID if sent successfully, otherwise an error
+   */
 
   async sendMessage(
     event: EventWrapper<any, any>,
@@ -369,6 +472,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return { mid: this._generateId() };
   }
 
+  /**
+   * Edits the source message of the quick replies
+   * This method is called when the user selects a quick reply
+   * and the source message needs to be updated to reflect the user's choice
+   *
+   * @param event - The event to wrap
+   */
   editQuickRepliesSourceMessage(event: SlackEventWrapper) {
     const text =
       event._raw.original_message.attachments[0].text +
@@ -379,6 +489,14 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     this.api.sendResponse({ attachments: [{ text }] }, event.getResponseUrl()); // assuming that quickreply message is only one attachment
   }
 
+  //TODO: uploadAttachment
+
+  /**
+   * Fetches the end user profile data
+   *
+   * @param event - The event to wrap
+   * @returns A Promise that resolves to the end user's profile data
+   */
   async getUserData(
     event: EventWrapper<any, any>,
   ): Promise<SubscriberCreateDto> {
@@ -410,6 +528,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     };
   }
 
+  /**
+   * Uploads the end user's profile picture to the attachment service
+   *
+   * @param user - The end user's profile data
+   */
   uploadProfilePicture(user: Slack.User) {
     //get the image_* with the highest resolution
     const imageAttribute = Object.keys(user.profile)
@@ -432,37 +555,34 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       });
   }
 
-  async _formatMessage(
-    envelope: StdOutgoingEnvelope,
-    channel: string,
-    options: BlockOptions,
-  ): Promise<Slack.OutgoingMessage> {
-    switch (envelope.format) {
-      case OutgoingMessageFormat.attachment:
-        return await this._attachmentFormat(envelope.message, channel, options);
-      case OutgoingMessageFormat.buttons:
-        return this._buttonsFormat(envelope.message, options);
-      case OutgoingMessageFormat.carousel:
-        return this._carouselFormat(envelope.message, options);
-      case OutgoingMessageFormat.list:
-        return this._listFormat(envelope.message, options);
-      case OutgoingMessageFormat.quickReplies:
-        return this._quickRepliesFormat(envelope.message, options);
-      case OutgoingMessageFormat.text:
-        return this._textFormat(envelope.message, options);
-
-      default:
-        throw new Error('Unknown message format');
+  /**
+   * Handles the App Home Opened event
+   *
+   * @param _raw - The raw event object
+   */
+  handleAppHomeOpened(_raw: Slack.AppHomeOpened) {
+    if (_raw.tab === 'home') {
+      this._setHomeTab();
     }
   }
 
+  /**
+   * Sets the home tab for the user
+   * This method is called when the user opens the app home tab
+   */
   async _setHomeTab() {
     const menuTree = await this.menuService.getTree();
     const tempUserId = 'U07PKPB6W2Y'; //TODO: to remove
-    this.api.publishHomeTab(this.formatMenu(menuTree), tempUserId);
+    this.api.publishHomeTab(this.formatHomeTab(menuTree), tempUserId);
   }
 
-  formatMenu(menuTree: MenuTree): Slack.HomeTabView {
+  /**
+   * Formats the home tab to be sent to Slack
+   *
+   * @param menuTree - The menu tree to be formatted
+   * @returns - The formatted menu in the format required by Slack
+   */
+  formatHomeTab(menuTree: MenuTree): Slack.HomeTabView {
     return {
       type: 'home',
       blocks: [
@@ -500,6 +620,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     };
   }
 
+  /**
+   * Formats the menu tree to be sent to Slack in the home tab
+   *
+   * @param menuTree
+   * @param level
+   * @returns
+   */
   formatMenuBlocks(menuTree: MenuTree, level: number = 0): Slack.KnownBlock[] {
     const blocks = menuTree.reduce((acc, item) => {
       acc.push({
@@ -583,13 +710,43 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     return blocks;
   }
 
-  @OnEvent('hook:slack_channel:access_token') //Make the settings event more specific to slack channel
+  /**
+   * Updates the access token for the Slack API
+   *
+   * @param setting
+   */
+  @OnEvent('hook:slack_channel:access_token')
   async updateAccessToken(setting: THydratedDocument<Setting>) {
     this.api.setAccessToken(setting.value);
   }
 
+  /**
+   * Updates the signing secret for the Slack API
+   *
+   * @param setting
+   */
   @OnEvent('hook:slack_channel:signing_secret')
   async updateSigningSecret(setting: THydratedDocument<Setting>) {
     this.api.setSigningSecret(setting.value);
+  }
+
+  /**
+   * Middleware to verify the signature of an incoming request from Slack
+   *
+   * @param _req
+   * @param _res
+   * @param next
+   * @returns
+   */
+  async middleware(
+    _req: Request,
+    _res: Response,
+    next: NextFunction,
+  ): Promise<any> {
+    debugger;
+    if (!this.api.verifySignature(_req)) {
+      return _res.status(401).send('Unauthorized');
+    }
+    next();
   }
 }

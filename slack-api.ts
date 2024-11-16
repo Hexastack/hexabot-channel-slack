@@ -95,7 +95,7 @@ export class SlackApi {
   }
 
   async sendMessage(message: any, channel) {
-    await firstValueFrom(
+    return await firstValueFrom(
       this.httpService.post(Slack.ApiEndpoint.chatPostMessage, {
         channel,
         ...message,

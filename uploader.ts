@@ -36,7 +36,7 @@ export default class SlackFileUploader {
   private async uploadToSlack(uploadUrl: string) {
     const fileStream = await this.attachmentService.downloadAsBytes(
       this.attachment.payload,
-    ); //fs.createReadStream(this.attachement.pa  yload.url);
+    );
     await this.slackApi.uploadFile(uploadUrl, fileStream);
   }
 }
