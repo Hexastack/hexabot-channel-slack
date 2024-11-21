@@ -72,9 +72,14 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * Logs a debug message indicating the initialization of the Slack Channel Handler
    */
   async init(): Promise<void> {
-    this.logger.debug('Slack Channel Handler: Initializing...');
+    this.logger.setContext('Slack Channel Handler');
+    this.logger.debug('Initializing...');
     const settings = await this.getSettings();
     this.api = new SlackApi(settings.access_token, settings.signing_secret);
+  }
+
+  isAppHomeOpenedEvent(event: Slack.Event): event is Slack.AppHomeOpened {
+    return event.type === Slack.SlackType.app_home_opened;
   }
 
   /**
@@ -86,42 +91,51 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   handle(req: Request, res: Response) {
     debugger;
-    this.logger.debug('Slack Channel Handler: Handling request...');
-    const data = req.body;
+    this.logger.debug('Handling request...');
+    const data = req.body as Slack.BodyEvent;
 
     // Handle url_verification for Slack API, return the challenge value
-    if (data.type && data.type === 'url_verification') {
-      this.logger.debug('Slack Channel Handler: Handling url_verification...');
+    if (this.isUrlVerificationEvent(data)) {
+      this.logger.debug('Handling url_verification...');
       return res.status(200).send(data.challenge);
     }
 
     try {
       const event = new SlackEventWrapper(this, data);
       event.set('mid', this._generateId());
+
+      if (event.shouldBeIgnored()) {
+        this.logger.debug('Ignoring event:', event);
+        return res.status(200).send('');
+      }
+
+      // If the event is an App Home Opened event, handle it
+      if (this.isAppHomeOpenedEvent(event._raw)) {
+        this.handleAppHomeOpened(event._raw);
+        return res.status(200).send('');
+      }
+
+      // If the event is a response to a quick reply, edit the source message
       if (event.isQuickReplies()) {
         this.editQuickRepliesSourceMessage(event);
-      }
-      if (event._raw.type === Slack.SlackType.app_home_opened) {
-        this.handleAppHomeOpened(event._raw as Slack.AppHomeOpened);
-        return res.status(200).send('');
       }
 
       const type = event.getEventType();
       if (type) {
         this.eventEmitter.emit(`hook:chatbot:${type}`, event);
       } else {
-        this.logger.error(
-          'Slack Channel Handler: Webhook received unknown event',
-          event,
-        );
+        this.logger.error('Webhook received unknown event', event);
       }
     } catch (error) {
-      this.logger.error(
-        'Slack Channel Handler: Something went wrong while handling events',
-        error,
-      );
+      this.logger.error('Something went wrong while handling events', error);
     }
     return res.status(200).send('');
+  }
+
+  isUrlVerificationEvent(
+    data: Slack.BodyEvent,
+  ): data is Slack.URLVerificationEvent {
+    return 'type' in data && data.type === Slack.EventType.url_verification;
   }
 
   /**
@@ -323,8 +337,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             url: btn.url,
           });
         } else {
-          //button without url
-          btn.payload = btn.title + ':' + 'payload //TODO: to remove'; //item.getPayload();
           elements.push({
             type: 'button',
             text: {
@@ -367,9 +379,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
     // Items count min check
     if (data.length < 0) {
-      this.logger.error(
-        'Slack Channel Handler : Unsufficient content count (must be >= 1 for list)',
-      );
+      this.logger.error('Unsufficient content count (must be >= 1 for list)');
       throw new Error('Unsufficient content count (list >= 1)');
     }
     elements = this._formatElements(data, options);
@@ -462,7 +472,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     options: BlockOptions,
     context: any,
   ): Promise<{ mid: string }> {
-    const channel = (event._profile.channel as any).channel_id; //TODO: remove the any
+    const channel = (event._profile.channel as any)[SLACK_CHANNEL_NAME]
+      .channel_id; //TODO: remove the any
     const message = await this._formatMessage(envelope, channel, options);
 
     if (message) {
@@ -548,10 +559,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         this.attachmentService.uploadProfilePic(res, user.id + '.jpeg');
       })
       .catch((err) => {
-        this.logger.error(
-          'Slack Channel Handler Error downloading profile picture',
-          err,
-        );
+        this.logger.error('Error downloading profile picture', err);
       });
   }
 
@@ -743,7 +751,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     _res: Response,
     next: NextFunction,
   ): Promise<any> {
-    debugger;
     if (!this.api.verifySignature(_req)) {
       return _res.status(401).send('Unauthorized');
     }

@@ -148,9 +148,9 @@ export namespace Slack {
   }
 
   export interface Event {
-    api_app_id: string; //  TODO: to verify that it's there for all events
+    api_app_id: string;
     type: SlackType;
-    event_ts: string;
+    event_ts?: string;
     user?: string;
     ts?: string;
     app_id?: string; // only for echo messages
@@ -173,10 +173,6 @@ export namespace Slack {
     attachments?: MessageAttachment[];
     channel_type?: 'im' | 'mpim' | 'private' | 'public' | 'channel';
   }
-
-  /*export enum SstdEventType   extends StdEventType{
-
-  }*/
 
   export enum SubtypeEvent { //TODmtbh: in INcomingAttachement??O: add more subtypes (like "message_replied")
     echo_message = 'bot_message',
@@ -301,6 +297,7 @@ export namespace Slack {
   }
 
   export interface CommandEvent {
+    api_app_id: string;
     channel_id: string;
     channel_name?: string;
     command: string;
@@ -312,6 +309,12 @@ export namespace Slack {
     trigger_id?: string;
     user_id: string;
     user_name?: string;
+  }
+
+  export interface URLVerificationEvent {
+    token: string;
+    challenge: string;
+    type: EventType.url_verification;
   }
 
   export type BodyEvent = IncomingEvent | PayloadEvent | CommandEvent;

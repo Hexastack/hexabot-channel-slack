@@ -10,7 +10,6 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import EventWrapper from '@/channel/lib/EventWrapper';
-import ChannelHandler from '@/channel/lib/Handler';
 import {
   AttachmentForeignKey,
   AttachmentPayload,
@@ -23,6 +22,8 @@ import {
 } from '@/chat/schemas/types/message';
 import { Payload, PayloadType } from '@/chat/schemas/types/quick-reply';
 
+import { SlackHandler } from './index.channel';
+import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
 
 type SlackEventAdapter = {
@@ -33,11 +34,18 @@ type SlackEventAdapter = {
 
 export default class SlackEventWrapper extends EventWrapper<
   SlackEventAdapter,
-  Slack.BodyEvent
+  Slack.BodyEvent,
+  SlackHandler
 > {
   _raw: Slack.Event;
 
-  eventType: StdEventType;
+  private eventType: StdEventType;
+
+  private eventMessage: StdIncomingMessage;
+
+  private messageType: IncomingMessageType;
+
+  messagePayload: Payload | string | undefined;
 
   /**
    * Constructor; Channel's event wrapper
@@ -45,15 +53,25 @@ export default class SlackEventWrapper extends EventWrapper<
    * @param handker - The channel's handler
    * @param event - The event to wrap
    */
-  constructor(handler: ChannelHandler, data: Slack.BodyEvent) {
+  constructor(handler: SlackHandler, data: Slack.BodyEvent) {
     debugger;
     super(handler, data);
-    const channelData: Slack.ChannelData = { channel_id: this._raw.channel };
+    const channelData = {
+      [SLACK_CHANNEL_NAME]: { channel_id: this._raw.channel },
+    };
     this.set('channelData', channelData);
   }
 
   _init(event: Slack.BodyEvent): void {
     this._raw = this.parseEvent(event);
+  }
+
+  isSlackIncomingEvent(data: Slack.BodyEvent): data is Slack.IncomingEvent {
+    return (data as Slack.IncomingEvent).event !== undefined;
+  }
+
+  isSlackPayloadEvent(data: Slack.BodyEvent): data is Slack.PayloadEvent {
+    return (data as Slack.PayloadEvent).payload !== undefined;
   }
 
   /**
@@ -64,15 +82,12 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   private parseEvent(data: Slack.BodyEvent): Slack.Event {
     let data_event: Slack.Event;
-    if ((<Slack.IncomingEvent>data).event) {
-      data_event = (<Slack.IncomingEvent>data).event;
-      data_event.api_app_id = (<Slack.IncomingEvent>data).api_app_id;
-    }
-    if ((<Slack.PayloadEvent>data).payload) {
+    if (this.isSlackIncomingEvent(data)) {
+      data_event = data.event;
+      data_event.api_app_id = data.api_app_id;
+    } else if (this.isSlackPayloadEvent(data)) {
       //if the event is a payload, we receive a string
-      const payload = JSON.parse(
-        (<Slack.PayloadEvent>data).payload,
-      ) as Slack.IncomingPayload;
+      const payload = JSON.parse(data.payload) as Slack.IncomingPayload;
       data_event = {
         actions: payload.actions,
         channel: payload.channel?.id,
@@ -87,18 +102,18 @@ export default class SlackEventWrapper extends EventWrapper<
         response_url: payload.response_url,
         original_message: payload.original_message,
       };
-    } else if ((<Slack.CommandEvent>data).command) {
+    } else if (data.command) {
       //TODO: not tested
       //if the event is a slash command event
-      const datac: Slack.CommandEvent = <Slack.CommandEvent>data;
       data_event = {
+        api_app_id: data.api_app_id,
         type: Slack.SlackType.incoming_message,
-        text: datac.command + ' ' + datac.text,
-        user: datac.user_id,
-        team: datac.team_id,
-        channel: datac.channel_id,
+        text: data.command + ' ' + data.text,
+        user: data.user_id,
+        team: data.team_id,
+        channel: data.channel_id,
         channel_type: 'im',
-      } as Slack.Event;
+      };
     }
 
     return data_event;
@@ -119,7 +134,11 @@ export default class SlackEventWrapper extends EventWrapper<
    * @returns The message's id
    */
   getId(): string {
-    return this._raw.client_msg_id ?? this._generateId();
+    if (!this._raw.client_msg_id) {
+      debugger;
+      this._raw.client_msg_id = this._generateId();
+    }
+    return this._raw.client_msg_id;
   }
 
   /**
@@ -131,11 +150,28 @@ export default class SlackEventWrapper extends EventWrapper<
     return this._raw.user || null;
   }
 
-  // TODO: to check???
   getRecipientForeignId(): string {
-    //TODO: to check
-    if (this.getEventType() === StdEventType.echo) return null;
-    return null;
+    return this.getEventType() === StdEventType.echo ? this._raw.user : null;
+  }
+
+  _resolveEventType(): StdEventType {
+    debugger;
+    const msg = this._raw;
+    if (msg.bot_id) {
+      return StdEventType.echo;
+    } else if (
+      msg.type === Slack.SlackType.interactive_message ||
+      msg.type === Slack.SlackType.block_actions ||
+      (msg.type == Slack.SlackType.incoming_message &&
+        ((msg.channel_type === 'channel' &&
+          msg.text &&
+          msg.text.includes('<@)' + 'sails.settings.slack_user_id' + '>')) ||
+          msg.channel_type === 'im'))
+    ) {
+      return StdEventType.message;
+    } else {
+      return StdEventType.unknown;
+    }
   }
 
   /**
@@ -146,23 +182,7 @@ export default class SlackEventWrapper extends EventWrapper<
   getEventType(): StdEventType {
     //TODO: to test all the cases
     if (!this.eventType) {
-      const msg = this._raw;
-      if (msg.bot_id) {
-        this.eventType = StdEventType.echo;
-      } else if (
-        ((msg.type === Slack.SlackType.interactive_message ||
-          msg.type === Slack.SlackType.block_actions) &&
-          msg.actions[0].value !== 'url') ||
-        (msg.type == Slack.SlackType.incoming_message &&
-          ((msg.channel_type === 'channel' &&
-            msg.text &&
-            msg.text.includes('<@)' + 'sails.settings.slack_user_id' + '>')) ||
-            msg.channel_type === 'im'))
-      ) {
-        this.eventType = StdEventType.message;
-      } else {
-        this.eventType = StdEventType.unknown;
-      }
+      this.eventType = this._resolveEventType();
     }
     return this.eventType;
   }
@@ -178,44 +198,49 @@ export default class SlackEventWrapper extends EventWrapper<
     );
   }
 
+  _resolveMessageType(): IncomingMessageType {
+    if (this.getEventType() !== StdEventType.message)
+      IncomingMessageType.unknown;
+
+    const msg = this._raw;
+    if (
+      msg.original_message?.attachments?.[0]?.callback_id ===
+      Slack.CallbackId.quick_replies
+    ) {
+      return IncomingMessageType.quick_reply;
+    }
+    if (msg.actions) {
+      return IncomingMessageType.postback;
+    } else if (msg.files && msg.files.length >= 1) {
+      return IncomingMessageType.attachments;
+    } else if (msg.text || msg.attachments || msg.blocks) {
+      return IncomingMessageType.message;
+    }
+    return IncomingMessageType.unknown;
+  }
+
   /**
    * Returns the type of message received
    *
    * @returns The type of message
    */
   getMessageType(): IncomingMessageType {
-    if (
-      [StdEventType.echo, StdEventType.message].indexOf(this.getEventType()) !==
-      -1
-    ) {
-      const msg = <Slack.Event>this._raw;
-      if (this.isQuickReplies()) {
-        return IncomingMessageType.quick_reply;
-      }
-      if (msg.actions) {
-        return IncomingMessageType.postback;
-      } else if (msg.files && msg.files.length >= 1) {
-        return IncomingMessageType.attachments;
-      } else if (msg.text || msg.attachments || msg.blocks) {
-        return IncomingMessageType.message;
-      }
+    if (!this.messageType) {
+      this.messageType = this._resolveMessageType();
     }
-    return IncomingMessageType.unknown;
+    return this.messageType;
   }
 
-  /**
-   * Returns payload whenever user clicks on a button/quick_reply or sends an attachment
-   *
-   * @returns The payload content
-   */
-  getPayload(): Payload | string | undefined {
-    // TODO: to optimize
+  _resolvePayload(): Payload | string | undefined {
+    //TODO: to optimze
     if (this.getEventType() !== StdEventType.message) return;
 
     const eventType = this.getMessageType();
     switch (eventType) {
-      case (IncomingMessageType.postback, IncomingMessageType.quick_reply):
-        return (<Slack.Event>this._raw).actions[0].value;
+      case IncomingMessageType.postback:
+        return this._raw.actions[0].value;
+      case IncomingMessageType.quick_reply:
+        return this._raw.actions[0].value;
       case IncomingMessageType.attachments:
         if (
           (<Slack.Event>this._raw).files &&
@@ -239,27 +264,36 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   /**
-   * Returns the message in a standardized format
+   * Returns payload whenever user clicks on a button/quick_reply or sends an attachment
    *
-   * @returns The received message
+   * @returns The payload content
    */
-  getMessage(): StdIncomingMessage {
+  getPayload(): Payload | string | undefined {
+    if (!this.messagePayload) {
+      this.messagePayload = this._resolvePayload();
+    }
+    return this.messagePayload;
+  }
+
+  _resolveMessage(): StdIncomingMessage {
     const type: IncomingMessageType = this.getMessageType();
-    let message: StdIncomingMessage;
     const msg = <Slack.Event>this._raw;
     switch (type) {
       case IncomingMessageType.message:
-        message = {
+        return {
           text: msg.text,
         };
-        break;
 
-      case (IncomingMessageType.postback, IncomingMessageType.quick_reply):
-        message = {
+      case IncomingMessageType.quick_reply:
+        return {
           postback: msg.actions[0].name,
           text: msg.actions[0].value,
         };
-        break;
+      case IncomingMessageType.postback:
+        return {
+          postback: msg.actions[0].text.text,
+          text: msg.actions[0].value,
+        };
 
       case IncomingMessageType.attachments:
         const attachments: Array<Slack.File> = (<Slack.Event>this._raw).files;
@@ -288,15 +322,33 @@ export default class SlackEventWrapper extends EventWrapper<
             };
           },
         );
-        message = {
+        return {
           type: PayloadType.attachments,
           serialized_text,
           attachment:
             stdAttachments.length === 1 ? stdAttachments[0] : stdAttachments,
         };
-        break;
     }
-    return message;
+  }
+
+  shouldBeIgnored(): boolean {
+    const msg = this._raw;
+    return (
+      msg.type === Slack.SlackType.block_actions &&
+      msg.actions[0].value === 'url'
+    );
+  }
+
+  /**
+   * Returns the message in a standardized format
+   *
+   * @returns The received message
+   */
+  getMessage(): StdIncomingMessage {
+    if (!this.eventMessage) {
+      this.eventMessage = this._resolveMessage();
+    }
+    return this.eventMessage;
   }
 
   /**
