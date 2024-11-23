@@ -42,7 +42,7 @@ export class SlackApi {
     const axiosInstance = axios.create({
       baseURL: 'https://slack.com/api',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=UTF-8',
         Authorization: `Bearer ${access_token}`,
       },
     });
