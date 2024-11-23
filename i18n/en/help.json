@@ -1,1 +1,4 @@
-{}
+{
+  "access_token": "The token that will be sent to Slack to authenticate the app",
+  "signing_secret": "The secret that will be used to verify the authenticity of the requests from Slack"
+}

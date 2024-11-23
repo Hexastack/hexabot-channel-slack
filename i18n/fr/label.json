@@ -1,3 +1,4 @@
 {
-  "access_token": "Jeton d’accès de l'App Slack"
+  "access_token": "Jeton d’accès de l'App Slack",
+  "signing_secret": "Secret de signature de l'App Slack"
 }
