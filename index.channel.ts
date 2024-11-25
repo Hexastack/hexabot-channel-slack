@@ -621,8 +621,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             emoji: true,
           },
         },
-
+        {
+          type: 'divider',
+        },
         ...this.formatMenuBlocks(menuTree),
+        {
+          type: 'divider',
+        },
       ],
       callback_id: 'Persistent_menu',
     };
@@ -636,21 +641,24 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @returns
    */
   formatMenuBlocks(menuTree: MenuTree, level: number = 0): Slack.KnownBlock[] {
-    const blocks = menuTree.reduce((acc, item) => {
-      acc.push({
-        type: 'divider',
-      });
+    const levelTab = '│       ';
+    const blocks = menuTree.reduce((acc, item, index) => {
+      const text =
+        levelTab.repeat(Math.max(0, level - 1)) +
+        (level > 0
+          ? index === menuTree.length - 1
+            ? '└──  '
+            : '├──  '
+          : ' ') +
+        item.title;
+      //'├' '── ' + item.title;
+      //const text = '> ' + '─────────'.repeat(level) + ' *' + item.title + '*';
       if (item.type === MenuType.postback) {
         acc.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              '> ' +
-              '                   '.repeat(level) +
-              '*' +
-              item.title +
-              '*',
+            text,
           },
           accessory: {
             type: 'button',
@@ -667,12 +675,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              '> ' +
-              '                   '.repeat(level) +
-              '*' +
-              item.title +
-              '*',
+            text,
           },
           accessory: {
             type: 'button',
@@ -696,21 +699,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             text: {
               type: 'mrkdwn',
 
-              text:
-                '> ' +
-                '                   '.repeat(level) +
-                '*' +
-                item.title +
-                ':*',
+              text,
             },
           },
-          {
-            type: 'divider',
-          },
+
           ...this.formatMenuBlocks(item.call_to_actions, level + 1),
-          {
-            type: 'divider',
-          },
         );
       }
       return acc;
