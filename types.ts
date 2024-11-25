@@ -15,6 +15,7 @@ export namespace Slack {
     app_home_opened = 'app_home_opened',
     payload = 'payload',
     incoming_message = 'message',
+    app_mention = 'app_mention',
     file_shared = 'file_shared',
     file_created = 'file_created',
     interactive_message = 'interactive_message', //payload type

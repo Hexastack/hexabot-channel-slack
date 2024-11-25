@@ -13,7 +13,6 @@ import EventWrapper from '@/channel/lib/EventWrapper';
 import {
   AttachmentForeignKey,
   AttachmentPayload,
-  FileType,
 } from '@/chat/schemas/types/attachment';
 import {
   IncomingMessageType,

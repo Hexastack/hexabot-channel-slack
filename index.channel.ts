@@ -50,6 +50,8 @@ import SlackEventWrapper from './wrapper';
 export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   private api: SlackApi;
 
+  private homeTabContent: Slack.KnownBlock[];
+
   constructor(
     settingService: SettingService,
     channelService: ChannelService,
@@ -75,7 +77,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     this.logger.setContext('Slack Channel Handler');
     this.logger.debug('Initializing...');
     const settings = await this.getSettings();
-    this.api = new SlackApi(settings.access_token, settings.signing_secret);
+    this.homeTabContent = this.parseHomeTabContent(settings?.home_tab_content);
+    this.api = new SlackApi(settings?.access_token, settings?.signing_secret);
   }
 
   isAppHomeOpenedEvent(event: Slack.Event): event is Slack.AppHomeOpened {
@@ -90,7 +93,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @returns
    */
   handle(req: Request, res: Response) {
-    debugger;
+    //debugger;
     this.logger.debug('Handling request...');
     const data = req.body as Slack.BodyEvent;
 
@@ -111,7 +114,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
       // If the event is an App Home Opened event, handle it
       if (this.isAppHomeOpenedEvent(event._raw)) {
-        this.handleAppHomeOpened(event._raw);
+        this.handleAppHomeOpened(event._raw); //TODO: add get started
         return res.status(200).send('');
       }
 
@@ -570,18 +573,31 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   handleAppHomeOpened(_raw: Slack.AppHomeOpened) {
     if (_raw.tab === 'home') {
-      this._setHomeTab();
+      this._setHomeTab(_raw.user);
     }
   }
 
   /**
    * Sets the home tab for the user
    * This method is called when the user opens the app home tab
+   *
+   * @param userId - The user ID
    */
-  async _setHomeTab() {
+  async _setHomeTab(userId: string) {
     const menuTree = await this.menuService.getTree();
-    const tempUserId = 'U07PKPB6W2Y'; //TODO: to remove
-    this.api.publishHomeTab(this.formatHomeTab(menuTree), tempUserId);
+    debugger;
+
+    const res = await this.api.publishHomeTab(
+      this.formatHomeTab(menuTree),
+      userId,
+    );
+    if (!res.data.ok) {
+      const errors = res.data.response_metadata.messages;
+      await this.api.publishHomeTab(
+        this.formatHomeTab(menuTree, this.buildInvalidContentBlocks(errors)),
+        userId,
+      );
+    }
   }
 
   /**
@@ -590,29 +606,14 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param menuTree - The menu tree to be formatted
    * @returns - The formatted menu in the format required by Slack
    */
-  formatHomeTab(menuTree: MenuTree): Slack.HomeTabView {
+  formatHomeTab(
+    menuTree: MenuTree,
+    homeTabContent: Slack.KnownBlock[] = this.homeTabContent,
+  ): Slack.HomeTabView {
     return {
       type: 'home',
       blocks: [
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: 'Hexabot',
-            emoji: true,
-          },
-        },
-
-        {
-          type: 'divider',
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: 'Welcome to *Hexabot!*\n',
-          },
-        },
+        ...homeTabContent,
         {
           type: 'header',
           text: {
@@ -631,6 +632,63 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       ],
       callback_id: 'Persistent_menu',
     };
+  }
+
+  /**
+   * Builds content of the Home tab when the provided content is invalid
+   * takes an array of errors and returns a formatted block
+   *
+   * @param errors
+   * @returns
+   */
+  buildInvalidContentBlocks(errors: string[]): Slack.KnownBlock[] {
+    {
+      const errorMessages = errors?.join('\n');
+      const errorsBlock: Slack.KnownBlock[] = errorMessages
+        ? [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '*Errors:*',
+              },
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `\`\`\`${errorMessages}\`\`\``,
+              },
+            },
+          ]
+        : [];
+
+      return [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: ':red_circle: *The provided content is invalid!*',
+          },
+        },
+        { type: 'divider' },
+        ...errorsBlock,
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: 'To fix this, ensure that you add the array of blocks in the `Slack` section of the Hexabot dashboard settings.',
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: 'To help you create valid Slack block content, use the Block Kit Builder: <https://app.slack.com/block-kit-builder|Block Kit Builder>',
+          },
+        },
+      ];
+    }
   }
 
   /**
@@ -712,6 +770,24 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   /**
+   * Parses the content of the home tab.
+   *
+   * @param content - The content of the home tab
+   * @returns
+   */
+
+  parseHomeTabContent(content: string): Slack.KnownBlock[] {
+    try {
+      const parsedContent = JSON.parse(content);
+      if (Array.isArray(parsedContent)) {
+        return parsedContent as any as Slack.KnownBlock[]; //TODO: check if it's correct
+      }
+    } catch (e) {}
+    this.logger.warn('Invalid home tab content, using default content.');
+    return this.buildInvalidContentBlocks(['Invalid JSON array']);
+  }
+
+  /**
    * Updates the access token for the Slack API
    *
    * @param setting
@@ -729,6 +805,17 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   @OnEvent('hook:slack_channel:signing_secret')
   async updateSigningSecret(setting: THydratedDocument<Setting>) {
     this.api.setSigningSecret(setting.value);
+  }
+
+  /**
+   * Updates the content of the home tab
+   *
+   * @param setting
+   */
+  @OnEvent('hook:slack_channel:home_tab_content')
+  updateHomeTabContent(setting: THydratedDocument<Setting>) {
+    debugger;
+    this.homeTabContent = this.parseHomeTabContent(setting.value);
   }
 
   /**

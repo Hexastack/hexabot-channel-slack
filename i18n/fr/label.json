@@ -1,4 +1,5 @@
 {
   "access_token": "Jeton d’accès de l'App Slack",
-  "signing_secret": "Secret de signature de l'App Slack"
+  "signing_secret": "Secret de signature de l'App Slack",
+  "home_tab_content": "Contenu de l'onglet Accueil"
 }

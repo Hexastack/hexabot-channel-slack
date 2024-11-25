@@ -6,7 +6,7 @@
  * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
  */
 
-import DEFAULT_SLACK_SETTINGS from './settings';
+import DEFAULT_SLACK_SETTINGS, { SLACK_CHANNEL_NAMESPACE } from './settings';
 
 declare global {
   interface Settings extends SettingTree<typeof DEFAULT_SLACK_SETTINGS> {}
@@ -14,7 +14,7 @@ declare global {
 
 declare module '@nestjs/event-emitter' {
   interface IHookExtensionsOperationMap {
-    [SLACK_GROUP_NAME]: TDefinition<
+    [SLACK_CHANNEL_NAMESPACE]: TDefinition<
       object,
       SettingMapByType<typeof DEFAULT_SLACK_SETTINGS>
     >;

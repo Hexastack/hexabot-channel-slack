@@ -51,7 +51,7 @@ export class SlackApi {
         if (response.data.ok === false) {
           debugger; //
           Logger.error(
-            `${response.data.error}: ${response.data.errors?.join(', ')}`,
+            `${response.data.error}: ${response.data.errors?.join(', ') || ''} \n   ${response.data.response_metadata?.messages?.join('\n   ') || ''}`,
             'Error: Slack API',
           );
         }
@@ -69,7 +69,6 @@ export class SlackApi {
     try {
       verifySlackRequest({
         signingSecret: this.signing_secret,
-        //body: req.body,// take the raw body instead
         body: req.rawBody,
         headers: {
           'x-slack-signature': req.headers['x-slack-signature'],

@@ -9,26 +9,56 @@
 import { ChannelSetting } from '@/channel/types';
 import { SettingType } from '@/setting/schemas/types';
 
+import { Slack } from './types';
+
 export const SLACK_CHANNEL_NAME = 'slack-channel';
 
-export const SLACK_GROUP_NAME = 'slack_channel';
+export const SLACK_CHANNEL_NAMESPACE = 'slack_channel';
+
+export const DEFAULT_HOME_TAB_CONTENT: Slack.KnownBlock[] = [
+  {
+    type: 'header',
+    text: {
+      type: 'plain_text',
+      text: 'Hexabot',
+      emoji: true,
+    },
+  },
+  {
+    type: 'divider',
+  },
+  {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: 'Welcome to *Hexabot!*\n',
+    },
+  },
+];
 
 export enum SettingLabel {
   access_token = 'access_token',
   signing_secret = 'signing_secret',
+  home_tab_content = 'home_tab_content',
 }
 
 export default [
   {
-    group: SLACK_GROUP_NAME,
+    group: SLACK_CHANNEL_NAMESPACE,
     label: SettingLabel.access_token,
     value: '',
     type: SettingType.secret,
   },
   {
-    group: SLACK_GROUP_NAME,
+    group: SLACK_CHANNEL_NAMESPACE,
     label: SettingLabel.signing_secret,
     value: '',
     type: SettingType.secret,
+  },
+  {
+    group: SLACK_CHANNEL_NAMESPACE,
+    label: SettingLabel.home_tab_content,
+    value: JSON.stringify(DEFAULT_HOME_TAB_CONTENT, null, 2),
+    type: SettingType.textarea,
   },
 ] as const satisfies ChannelSetting<typeof SLACK_CHANNEL_NAME>[];

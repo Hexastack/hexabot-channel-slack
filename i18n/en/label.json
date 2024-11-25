@@ -1,4 +1,5 @@
 {
   "access_token": "Slack App Access Token",
-  "signing_secret": "Slack App Signing Secret"
+  "signing_secret": "Slack App Signing Secret",
+  "home_tab_content": "Home Tab Content"
 }
