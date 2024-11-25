@@ -82,15 +82,12 @@ export class SlackApi {
   }
 
   async getUserInfo(userForeingId: string): Promise<Slack.User> {
-    return (
-      (
-        await firstValueFrom(
-          this.httpService.get(Slack.ApiEndpoint.usersInfo, {
-            params: { user: userForeingId },
-          }),
-        )
-      ).data as Slack.UsersInfoResponse
-    ).user;
+    const { data } = await firstValueFrom(
+      this.httpService.get(Slack.ApiEndpoint.usersInfo, {
+        params: { user: userForeingId },
+      }),
+    );
+    return data.user;
   }
 
   async sendMessage(message: any, channel) {
@@ -106,13 +103,12 @@ export class SlackApi {
     fileName: string,
     size: number,
   ): Promise<Slack.UploadUrlData> {
-    return (
-      await firstValueFrom(
-        this.httpService.get(Slack.ApiEndpoint.getUploadURL, {
-          params: { filename: fileName, length: size },
-        }),
-      )
-    ).data;
+    const { data } = await firstValueFrom(
+      this.httpService.get(Slack.ApiEndpoint.getUploadURL, {
+        params: { filename: fileName, length: size },
+      }),
+    );
+    return data;
   }
 
   async uploadFile(uploadUrl: string, buffer: Buffer) {
@@ -127,14 +123,13 @@ export class SlackApi {
 
   async CompleteUpload(files: any, channel_id?: string): Promise<Slack.File[]> {
     //TODO: remove any
-    return (
-      await firstValueFrom(
-        this.httpService.post(Slack.ApiEndpoint.completeUpload, {
-          channel_id,
-          files,
-        }),
-      )
-    ).data.files;
+    const { data } = await firstValueFrom(
+      this.httpService.post(Slack.ApiEndpoint.completeUpload, {
+        channel_id,
+        files,
+      }),
+    );
+    return data.files;
   }
 
   async sendResponse(message: any, responseUrl: string) {
