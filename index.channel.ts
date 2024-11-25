@@ -160,7 +160,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   _textFormat(
     message: StdOutgoingTextMessage,
-    options?: any,
+    options?: BlockOptions,
   ): Slack.OutgoingMessage {
     return {
       text: message.text,
@@ -176,7 +176,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   _quickRepliesFormat(
     message: StdOutgoingQuickRepliesMessage,
-    options?: any,
+    options?: BlockOptions,
   ): Slack.OutgoingMessage {
     const actions: Array<Slack.Button> = message.quickReplies.map((btn) => {
       const format_btn: Slack.Button = {
@@ -208,7 +208,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   _buttonsFormat(
     message: StdOutgoingButtonsMessage,
-    options?: any,
+    options?: BlockOptions,
     ...args: any
   ): Slack.OutgoingMessage {
     const textSection: Slack.SectionBlock = {
@@ -263,7 +263,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   async _attachmentFormat(
     message: StdOutgoingAttachmentMessage<WithUrl<Attachment>>,
     channel: string,
-    options?: any,
+    options?: BlockOptions,
   ): Promise<Slack.OutgoingMessage> {
     const fileUploader = new SlackFileUploader(
       this.api,
@@ -288,7 +288,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param options - Might contain additional settings
    * @returns - A Blocks array of Slack elements
    */
-  _formatElements(data: any[], options: any, ...args: any): any[] {
+  _formatElements(data: any[], options: BlockOptions, ...args: any): any[] {
     const fields = options.content.fields;
     const buttons = options.content.buttons;
     //To build a list :
@@ -369,7 +369,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   _listFormat(
     message: StdOutgoingListMessage,
-    options: any,
+    options: BlockOptions,
     ...args: any
   ): Slack.OutgoingMessage {
     const data = message.elements || [];
@@ -421,7 +421,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   _carouselFormat(
     message: StdOutgoingListMessage,
-    options: any,
+    options: BlockOptions,
     ...args: any
   ): Slack.OutgoingMessage {
     return this._listFormat(message, options);
@@ -821,18 +821,18 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   /**
    * Middleware to verify the signature of an incoming request from Slack
    *
-   * @param _req
-   * @param _res
+   * @param req
+   * @param res
    * @param next
    * @returns
    */
   async middleware(
-    _req: Request,
-    _res: Response,
+    req: Request,
+    res: Response,
     next: NextFunction,
   ): Promise<any> {
-    if (!this.api.verifySignature(_req)) {
-      return _res.status(401).send('Unauthorized');
+    if (!this.api.verifySignature(req)) {
+      return res.status(401).send('Unauthorized');
     }
     next();
   }
