@@ -7,9 +7,10 @@
  */
 
 import { HttpService } from '@nestjs/axios';
-import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { firstValueFrom } from 'rxjs';
+
+import { LoggerService } from '@/logger/logger.service';
 
 import { Slack } from './types';
 import { verifySlackRequest } from './verify-request';
@@ -17,7 +18,8 @@ import { verifySlackRequest } from './verify-request';
 export class SlackApi {
   private httpService: HttpService;
 
-  //TODO: handle api errors
+  private logger = new LoggerService('Slack Api');
+
   constructor(
     access_token: string,
     private signing_secret: string,
@@ -26,18 +28,18 @@ export class SlackApi {
   }
 
   setAccessToken(access_token: string) {
-    Logger.verbose('Access token updated', 'Slack Api');
+    this.logger.verbose('Access token updated');
     this.buildHttpService(access_token);
   }
 
   setSigningSecret(signing_secret: string) {
-    Logger.verbose('Signing secret updated', 'Slack Api');
+    this.logger.verbose('Signing secret updated');
     this.signing_secret = signing_secret;
   }
 
   private buildHttpService(access_token: string) {
     if (!access_token) {
-      Logger.error('Access token is missing', 'Error: Slack Api');
+      this.logger.error('Access token is missing');
     }
     const axiosInstance = axios.create({
       baseURL: 'https://slack.com/api',
@@ -49,17 +51,15 @@ export class SlackApi {
     axiosInstance.interceptors.response.use(
       (response) => {
         if (response.data.ok === false) {
-          debugger; //
-          Logger.error(
+          debugger;
+          this.logger.error(
             `${response.data.error}: ${response.data.errors?.join(', ') || ''} \n   ${response.data.response_metadata?.messages?.join('\n   ') || ''}`,
-            'Error: Slack API',
           );
         }
         return response;
       },
       (error) => {
-        debugger; //
-        Logger.error(error, 'Error: Slack Api');
+        this.logger.error(error);
       },
     );
     this.httpService = new HttpService(axiosInstance);
@@ -77,7 +77,7 @@ export class SlackApi {
       });
       return true;
     } catch (e) {
-      Logger.error(e, 'Error: Slack Api');
+      this.logger.error(e);
     }
   }
 
@@ -141,7 +141,7 @@ export class SlackApi {
     try {
       await axios.post(responseUrl, message);
     } catch (e) {
-      Logger.error(e, 'Error: Slack Api');
+      this.logger.error(e);
     }
   }
 
