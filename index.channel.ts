@@ -321,7 +321,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         if (index === 0 && fields.action_title && item[fields.action_title]) {
           btn.title = item[fields.action_title];
         }
-        if (button.type === 'web_url') {
+        if (btn.type === ButtonType.web_url) {
           // Get built-in or an exter nal URL from custom field
           const urlField = fields.url;
           btn.url = urlField && item[urlField] ? item[urlField] : '';
