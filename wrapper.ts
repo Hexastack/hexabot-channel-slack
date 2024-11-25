@@ -53,7 +53,7 @@ export default class SlackEventWrapper extends EventWrapper<
    * @param event - The event to wrap
    */
   constructor(handler: SlackHandler, data: Slack.BodyEvent) {
-    debugger;
+    //debugger;
     super(handler, data);
     const channelData = {
       [SLACK_CHANNEL_NAME]: { channel_id: this._raw.channel },
@@ -134,7 +134,6 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   getId(): string {
     if (!this._raw.client_msg_id) {
-      debugger;
       this._raw.client_msg_id = this._generateId();
     }
     return this._raw.client_msg_id;
@@ -150,11 +149,12 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   getRecipientForeignId(): string {
-    return this.getEventType() === StdEventType.echo ? this._raw.user : null;
+    return null;
+    //return this.getEventType() === StdEventType.echo ? this._raw.user : null;
   }
 
   _resolveEventType(): StdEventType {
-    debugger;
+    //todo: check if this is correct (mention)
     const msg = this._raw;
     if (msg.bot_id) {
       return StdEventType.echo;
@@ -162,10 +162,8 @@ export default class SlackEventWrapper extends EventWrapper<
       msg.type === Slack.SlackType.interactive_message ||
       msg.type === Slack.SlackType.block_actions ||
       (msg.type == Slack.SlackType.incoming_message &&
-        ((msg.channel_type === 'channel' &&
-          msg.text &&
-          msg.text.includes('<@)' + 'sails.settings.slack_user_id' + '>')) ||
-          msg.channel_type === 'im'))
+        msg.channel_type === 'im') ||
+      msg.type == Slack.SlackType.app_mention
     ) {
       return StdEventType.message;
     } else {
@@ -179,7 +177,6 @@ export default class SlackEventWrapper extends EventWrapper<
    * @returns The standardized event type
    */
   getEventType(): StdEventType {
-    //TODO: to test all the cases
     if (!this.eventType) {
       this.eventType = this._resolveEventType();
     }
@@ -231,7 +228,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   _resolvePayload(): Payload | string | undefined {
-    //TODO: to optimze
     if (this.getEventType() !== StdEventType.message) return;
 
     const eventType = this.getMessageType();
@@ -241,18 +237,14 @@ export default class SlackEventWrapper extends EventWrapper<
       case IncomingMessageType.quick_reply:
         return this._raw.actions[0].value;
       case IncomingMessageType.attachments:
-        if (
-          (<Slack.Event>this._raw).files &&
-          (<Slack.Event>this._raw).files[0]
-        ) {
-          const attachment: Slack.File = (<Slack.Event>this._raw).files[0];
-          const mimetype: boolean | string = attachment.mimetype
-            ? attachment.mimetype
-            : /*mime.lookup(*/ attachment.url_private; /*)*/ //TODO: to implement
+        if (this._raw.files && this._raw.files[0]) {
+          const attachment: Slack.File = this._raw.files[0];
+          const mimetype: boolean | string = attachment.mimetype;
+
           return {
             type: PayloadType.attachments,
             attachments: {
-              type: <FileType>(<unknown>Attachment.getTypeByMime(mimetype)),
+              type: Attachment.getTypeByMime(mimetype),
               payload: {
                 url: attachment.url_private,
               },
@@ -276,11 +268,11 @@ export default class SlackEventWrapper extends EventWrapper<
 
   _resolveMessage(): StdIncomingMessage {
     const type: IncomingMessageType = this.getMessageType();
-    const msg = <Slack.Event>this._raw;
+    const msg = this._raw;
     switch (type) {
       case IncomingMessageType.message:
         return {
-          text: msg.text,
+          text: this.removeSlackMentions(msg.text),
         };
 
       case IncomingMessageType.quick_reply:
@@ -295,39 +287,31 @@ export default class SlackEventWrapper extends EventWrapper<
         };
 
       case IncomingMessageType.attachments:
-        const attachments: Array<Slack.File> = (<Slack.Event>this._raw).files;
-        let serialized_text: string = 'attachment:';
+        const attachments = this._raw.files;
+        let serialized_text = 'attachment:';
 
         const file_path = attachments[0].url_private;
-        let mimetype: boolean | string = attachments[0].mimetype
-          ? attachments[0].mimetype
-          : /*mime.lookup(*/ file_path; /*);*/ //TODO: to implement
+        const mimetype = attachments[0].mimetype;
 
-        serialized_text += `${Attachment.getTypeByMime(mimetype)}:${file_path}`;
-        const stdAttachments /*: Array<AttachmentPayload>*/ = attachments.map(
-          (att) => {
-            mimetype = att.mimetype
-              ? att.mimetype
-              : /*mime.lookup(*/ att.url_private /*)*/; //TODO: to implement
-            return {
-              type: Object.values(FileType).includes(
-                <FileType>(<unknown>Attachment.getTypeByMime(mimetype)),
-              )
-                ? <FileType>(<unknown>Attachment.getTypeByMime(mimetype))
-                : FileType.unknown,
-              payload: {
-                url: att.url_private,
-              },
-            };
+        serialized_text += `${Attachment.getTypeByMime(mimetype)}:${file_path}`; //TODO: ?? serialized_text only for the first attachment??
+        const stdAttachments = attachments.map((att) => ({
+          type: Attachment.getTypeByMime(att.mimetype),
+          payload: {
+            url: att.url_private,
           },
-        );
+        }));
+
         return {
           type: PayloadType.attachments,
           serialized_text,
-          attachment:
-            stdAttachments.length === 1 ? stdAttachments[0] : stdAttachments,
+          attachment: stdAttachments,
         };
     }
+  }
+
+  removeSlackMentions(text: string): string {
+    debugger;
+    return text.replace(/<@U[A-Z0-9]{8,11}(?:\|[^>]+)?>/g, '').trim();
   }
 
   shouldBeIgnored(): boolean {
