@@ -10,7 +10,6 @@ import { createHmac } from 'crypto';
 
 import { HttpService } from '@nestjs/axios';
 import { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { firstValueFrom } from 'rxjs';
 import tsscmp from 'tsscmp';
 
 import { LoggerService } from '@/logger/logger.service';
@@ -126,13 +125,11 @@ export class SlackApi {
   }
 
   async uploadFile(uploadUrl: string, buffer: Buffer) {
-    return await firstValueFrom(
-      this.httpService.post(uploadUrl, buffer, {
-        headers: {
-          'Content-Type': 'application/octet-stream',
-        },
-      }),
-    );
+    return await this.httpService.axiosRef.post(uploadUrl, buffer, {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+    });
   }
 
   async CompleteUpload(files: any, channel_id?: string): Promise<Slack.File[]> {
@@ -151,7 +148,7 @@ export class SlackApi {
 
   async sendResponse(message: any, responseUrl: string) {
     try {
-      await this.httpService.post(responseUrl, message);
+      await this.httpService.axiosRef.post(responseUrl, message);
     } catch (e) {
       this.logger.error(e);
     }
