@@ -78,7 +78,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     this.logger.debug('Initializing...');
     const settings = await this.getSettings();
     this.homeTabContent = this.parseHomeTabContent(settings?.home_tab_content);
-    this.api = new SlackApi(settings?.access_token, settings?.signing_secret);
+    this.api = new SlackApi(
+      this.httpService,
+      this.logger,
+      settings?.access_token,
+      settings?.signing_secret,
+    );
   }
 
   isAppHomeOpenedEvent(event: Slack.Event): event is Slack.AppHomeOpened {

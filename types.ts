@@ -45,12 +45,28 @@ export namespace Slack {
    *  User Information
    */
 
-  export interface UsersInfoResponse {
-    ok?: boolean;
-    user?: User;
+  export interface SlackApiResponse {
+    ok: boolean;
     error?: string;
+    errors?: string[];
+    response_metadata: {
+      messages: string[];
+    };
+  }
+
+  export interface UsersInfoResponse extends SlackApiResponse {
+    user?: User;
     needed?: string;
     provided?: string;
+  }
+
+  export interface UploadUrlData extends SlackApiResponse {
+    upload_url: string;
+    file_id: string;
+  }
+
+  export interface CompleteFileUploadResponse extends SlackApiResponse {
+    files: File[];
   }
 
   export interface User {
@@ -166,7 +182,7 @@ export namespace Slack {
     subtype?: string;
     actions?: Payload[]; //for payload events
     text?: string; // mtbh: in INcomingAttachement??
-    files?: Array<File>; // mtbh: in INcomingAttachement??
+    files?: File[]; // mtbh: in INcomingAttachement??
 
     team?: string;
     blocks?: BlockObject[];
@@ -195,7 +211,7 @@ export namespace Slack {
 
   export interface IncomingAttachement extends Event {
     type: SlackType.incoming_message;
-    files: Array<File>;
+    files: File[];
     upload?: boolean;
     display_as_bot?: boolean;
     subtype: Slack.SubtypeEvent.file_share;
@@ -339,7 +355,7 @@ export namespace Slack {
   }
 
   export interface BlockMessage extends OutgoingMessage {
-    blocks: Array<KnownBlock>;
+    blocks: KnownBlock[];
   }
 
   export interface FileMessage extends OutgoingMessage {
@@ -574,12 +590,6 @@ export namespace Slack {
   }
 
   export type RequestBody = OutgoingMessageData | Profile | Action | {};
-
-  export type UploadUrlData = {
-    ok: boolean;
-    upload_url: string;
-    file_id: string;
-  };
 
   export type HomeTabView = {
     type: 'home';
