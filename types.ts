@@ -35,6 +35,7 @@ export namespace Slack {
     getUploadURL = 'files.getUploadURLExternal',
     completeUpload = 'files.completeUploadExternal',
     publishHomeTab = 'views.publish',
+    conversationsInfo = 'conversations.info',
   }
 
   export enum CallbackId {
@@ -60,6 +61,10 @@ export namespace Slack {
     provided?: string;
   }
 
+  export interface ConversationsInfoResponse extends SlackApiResponse {
+    channel: Conversation;
+  }
+
   export interface UploadUrlData extends SlackApiResponse {
     upload_url: string;
     file_id: string;
@@ -67,6 +72,11 @@ export namespace Slack {
 
   export interface CompleteFileUploadResponse extends SlackApiResponse {
     files: File[];
+  }
+
+  export interface CompleteFileUploadFile {
+    id: string;
+    title?: string;
   }
 
   export interface User {
@@ -90,6 +100,46 @@ export namespace Slack {
     updated?: number;
     has_2fa?: boolean;
     locale?: string;
+  }
+
+  export interface Conversation {
+    id: string;
+    created: number;
+    is_archived: boolean;
+    is_im: boolean;
+    is_org_shared: boolean;
+    context_team_id: string;
+    updated: number;
+    user: string;
+    last_read: string;
+    latest: any;
+    unread_count: number;
+    unread_count_display: number;
+    is_open: boolean;
+    properties: any;
+  }
+
+  export interface Channel extends Conversation {
+    name: string;
+    is_channel: true;
+    is_group: boolean;
+    is_mpim: boolean;
+    is_private: boolean;
+    is_general: boolean;
+    unlinked: number;
+    name_normalized: string;
+    is_shared: boolean;
+    is_pending_ext_shared: boolean;
+    pending_shared: any[];
+    parent_conversation: any;
+    creator: string;
+    is_ext_shared: boolean;
+    shared_team_ids: string[];
+    pending_shared_user_ids: any[];
+    is_member: boolean;
+    topic: any;
+    purpose: any;
+    previous_names: any[];
   }
 
   export interface Profile {

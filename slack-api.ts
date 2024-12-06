@@ -103,8 +103,16 @@ export class SlackApi {
     return data.user;
   }
 
+  async getConversationInfo(channel: string): Promise<Slack.Conversation> {
+    const { data } = await this.sendRequest<Slack.ConversationsInfoResponse>({
+      method: 'GET',
+      url: Slack.ApiEndpoint.conversationsInfo,
+      params: { channel },
+    });
+    return data.channel;
+  }
+
   async sendMessage(message: any, channel) {
-    debugger;
     return await this.sendRequest({
       method: 'POST',
       url: Slack.ApiEndpoint.chatPostMessage,
@@ -132,8 +140,10 @@ export class SlackApi {
     });
   }
 
-  async CompleteUpload(files: any, channel_id?: string): Promise<Slack.File[]> {
-    //TODO: remove any
+  async CompleteUpload(
+    files: Slack.CompleteFileUploadFile[],
+    channel_id?: string,
+  ): Promise<Slack.File[]> {
     const { data } = await this.sendRequest<Slack.CompleteFileUploadResponse>({
       method: 'POST',
       url: Slack.ApiEndpoint.completeUpload,

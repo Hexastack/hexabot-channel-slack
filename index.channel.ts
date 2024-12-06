@@ -98,7 +98,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @returns
    */
   handle(req: Request, res: Response) {
-    //debugger;
     this.logger.debug('Handling request...');
     const data = req.body as Slack.BodyEvent;
 
@@ -516,9 +515,33 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param event - The event to wrap
    * @returns A Promise that resolves to the end user's profile data
    */
-  async getUserData(
-    event: EventWrapper<any, any>,
-  ): Promise<SubscriberCreateDto> {
+  async getUserData(event: SlackEventWrapper): Promise<SubscriberCreateDto> {
+    const channel_type = event.getChannelType();
+
+    if (channel_type === 'channel') {
+      const channel = (await this.api.getConversationInfo(
+        event.getSenderForeignId(),
+      )) as Slack.Channel;
+      return {
+        foreign_id: channel.id,
+        first_name: channel.name,
+        last_name: '*channel', //TODO: to check
+        gender: 'Unknown',
+        language: 'en',
+        timezone: 0,
+        channel: {
+          name: this.getName() as ChannelName,
+        },
+        assignedAt: null,
+        assignedTo: null,
+        labels: [],
+        locale: 'en',
+        country: '',
+        lastvisit: new Date(),
+        retainedFrom: new Date(),
+      };
+    }
+
     const user = await this.api.getUserInfo(event.getSenderForeignId());
 
     const defautLanguage = await this.languageService.getDefaultLanguage();
@@ -590,8 +613,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   async _setHomeTab(userId: string) {
     const menuTree = await this.menuService.getTree();
-    debugger;
-
     const res = await this.api.publishHomeTab(
       this.formatHomeTab(menuTree),
       userId,
@@ -785,7 +806,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     try {
       const parsedContent = JSON.parse(content);
       if (Array.isArray(parsedContent)) {
-        return parsedContent as any as Slack.KnownBlock[]; //TODO: check if it's correct
+        return parsedContent as any as Slack.KnownBlock[];
       }
     } catch (e) {}
     this.logger.warn('Invalid home tab content, using default content.');
@@ -819,7 +840,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    */
   @OnEvent('hook:slack_channel:home_tab_content')
   updateHomeTabContent(setting: THydratedDocument<Setting>) {
-    debugger;
     this.homeTabContent = this.parseHomeTabContent(setting.value);
   }
 

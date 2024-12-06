@@ -53,10 +53,12 @@ export default class SlackEventWrapper extends EventWrapper<
    * @param event - The event to wrap
    */
   constructor(handler: SlackHandler, data: Slack.BodyEvent) {
-    //debugger;
     super(handler, data);
     const channelData = {
-      [SLACK_CHANNEL_NAME]: { channel_id: this._raw.channel },
+      [SLACK_CHANNEL_NAME]: {
+        channel_id: this._raw.channel,
+        channel_type: this._raw.channel_type,
+      },
     };
     this.set('channelData', channelData);
   }
@@ -71,6 +73,11 @@ export default class SlackEventWrapper extends EventWrapper<
 
   isSlackPayloadEvent(data: Slack.BodyEvent): data is Slack.PayloadEvent {
     return (data as Slack.PayloadEvent).payload !== undefined;
+  }
+
+  getChannelType(): string {
+    if (this._raw.channel_type) return this._raw.channel_type;
+    return this._raw.channel.startsWith('D') ? 'im' : 'channel';
   }
 
   /**
@@ -145,7 +152,10 @@ export default class SlackEventWrapper extends EventWrapper<
    * @returns
    */
   getSenderForeignId(): string {
-    return this._raw.user || null;
+    if (this.getChannelType() === 'im') {
+      return this._raw.user || null;
+    }
+    return this._raw.channel || null;
   }
 
   getRecipientForeignId(): string {
@@ -310,7 +320,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   removeSlackMentions(text: string): string {
-    debugger;
     return text.replace(/<@U[A-Z0-9]{8,11}(?:\|[^>]+)?>/g, '').trim();
   }
 
