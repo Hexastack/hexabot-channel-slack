@@ -16,10 +16,11 @@ import {
 } from '@/chat/schemas/types/attachment';
 import {
   IncomingMessageType,
+  PayloadType,
   StdEventType,
   StdIncomingMessage,
 } from '@/chat/schemas/types/message';
-import { Payload, PayloadType } from '@/chat/schemas/types/quick-reply';
+import { Payload } from '@/chat/schemas/types/quick-reply';
 
 import { SlackHandler } from './index.channel';
 import { SLACK_CHANNEL_NAME } from './settings';
