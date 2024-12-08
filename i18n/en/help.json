@@ -1,0 +1,5 @@
+{
+  "access_token": "The token that will be sent to Slack to authenticate the app",
+  "signing_secret": "The secret that will be used to verify the authenticity of the requests from Slack",
+  "home_tab_content": "The content that will be displayed in the Home tab of the Slack app. The format of the content should be a JSON array of slack blocks"
+}
