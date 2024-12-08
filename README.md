@@ -32,14 +32,6 @@ You have two options to create a Slack app: **From Scratch** or **From Manifest*
 
 4. Configure the app as follows:
 
-- **Bot User** :
-
-  1. Navigate to **App Features** > **Bot Users** in the sidebar.
-
-  2. Enable the bot user and set a display name for your bot.
-
-  3. Save your changes.
-
 - **OAuth & Permissions** :
 
   1. Navigate to **OAuth & Permissions** in the sidebar.
