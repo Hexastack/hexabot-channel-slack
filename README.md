@@ -45,7 +45,6 @@ You have two options to create a Slack app: **From Scratch** or **From Manifest*
      | channels:join     | Enables the bot to join public channels automatically.                      |
      | channels:read     | Provides access to metadata about public channels in the workspace.         |
      | chat:write        | Lets the bot send messages in conversations.                                |
-     | commands          | Enables the use of slash commands in Slack.                                 |
      | im:history        | Grants access to the direct message history where the bot is a participant. |
      | users:read        | Allows the bot to read user information in the workspace.                   |
      | files:read        | Lets the bot view files shared in the workspace.                            |
@@ -78,7 +77,7 @@ You have two options to create a Slack app: **From Scratch** or **From Manifest*
 
 #### Option 2: Create App From Manifest
 
-1. Go to [Slack API Apps]() and click **Create New App** .
+1. Go to [Slack API Apps](https://api.slack.com/) and click **Create New App** .
 
 2. Choose **From an App Manifest** .
 
@@ -102,7 +101,6 @@ oauth_config:
       - channels:join
       - channels:read
       - chat:write
-      - commands
       - im:history
       - users:read
       - files:read
