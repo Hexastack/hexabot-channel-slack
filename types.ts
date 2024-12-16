@@ -6,660 +6,734 @@
  * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
  */
 
+import { AppMentionEvent, Block, Confirmation, GenericMessageEvent, KnownBlock, MessageAttachment, Option, PlainTextElement, RichTextBlock, SlackEvent, View } from "@slack/types";
+
 export namespace Slack {
-  export type ChannelData = {
-    channel_id: string;
-  };
+    /****************************/
+    /* API RELATED TYPES        */
+    /****************************/
+    interface Text {
+        /**
+         * @description Text of the message. If used in conjunction with `blocks` or `attachments`, `text` will be used
+         * as fallback text for notifications only.
+         */
+        text: string;
+    }
+    export interface Blocks extends Partial<Text> {
+        /**
+         * @description An array of structured Blocks.
+         * @see {@link https://api.slack.com/reference/block-kit/blocks Blocks reference}.
+         */
+        blocks: (KnownBlock | Block)[];
+    }
+    export interface Attachments extends Partial<Text> {
+        /**
+         * @description An array of structured attachments.
+         * @see {@link https://api.slack.com/messaging/composing/layouts#attachments Adding secondary attachments}.
+         */
+        attachments: MessageAttachment[];
+    }
+    export type OutgoingMessage = (Text | Blocks | Attachments);
 
-  export enum SlackType { //TODO: to update https://api.slack.com/apis/events-api#event_type_structure
-    app_home_opened = 'app_home_opened',
-    payload = 'payload',
-    incoming_message = 'message',
-    app_mention = 'app_mention',
-    file_shared = 'file_shared',
-    file_created = 'file_created',
-    interactive_message = 'interactive_message', //payload type
-    shortcut = 'shortcut', //payload type
-    message_action = 'message_action', //payload type
-    block_actions = 'block_actions', //payload type
-  }
+    export interface RequestVerificationOptions {
+      signingSecret: string;
+      body: Buffer;
+      headers: {
+        'x-slack-signature': string | string[];
+        'x-slack-request-timestamp': string | string[];
+      };
+      nowMilliseconds?: number;
+      requestTimestampMaxDeltaMin?: number;
+    }
+    
+    export interface URLVerificationEvent {
+        token: string;
+        challenge: string;
+        type: 'url_verification';
+    }
 
-  export enum EventType {
-    event__callback = 'event_callback',
-    url_verification = 'url_verification',
-  }
-
-  export enum ApiEndpoint {
-    usersInfo = 'users.info',
-    chatPostMessage = 'chat.postMessage',
-    getUploadURL = 'files.getUploadURLExternal',
-    completeUpload = 'files.completeUploadExternal',
-    publishHomeTab = 'views.publish',
-    conversationsInfo = 'conversations.info',
-  }
-
-  export enum CallbackId {
-    quick_replies = 'quick_replies',
-    buttons = 'buttons',
-  }
-  /**
-   *  User Information
-   */
-
-  export interface SlackApiResponse {
-    ok: boolean;
-    error?: string;
-    errors?: string[];
-    response_metadata: {
-      messages: string[];
+    export type HomeTabView = {
+        type: 'home';
+        blocks: KnownBlock[];
+        private_metadata?: string;
+        callback_id?: string;
+        external_id?: string;
     };
-  }
 
-  export interface UsersInfoResponse extends SlackApiResponse {
-    user?: User;
-    needed?: string;
-    provided?: string;
-  }
+    export type ModalView = {
+        type: 'modal';
+        title: PlainTextElement;
+        blocks: KnownBlock[];
+        close: PlainTextElement;
+        submit: PlainTextElement;
+        private_metadata?: string;
+        callback_id?: string;
+        clear_on_close?: boolean;
+        notify_on_close?: boolean;
+        external_id?: string;
+        submit_disabled?: boolean;
+    };
 
-  export interface ConversationsInfoResponse extends SlackApiResponse {
-    channel: Conversation;
-  }
+    /****************************/
+    /* EVENT RELATED TYPES      */
+    /****************************/
 
-  export interface UploadUrlData extends SlackApiResponse {
-    upload_url: string;
-    file_id: string;
-  }
+    interface Authorization {
+        enterprise_id: string | null;
+        team_id: string | null;
+        user_id: string;
+        is_bot: boolean;
+        is_enterprise_install?: boolean;
+    }
+    export type ChannelTypes = 'channel' | 'group' | 'im' | 'mpim' | 'app_home';
 
-  export interface CompleteFileUploadResponse extends SlackApiResponse {
-    files: File[];
-  }
+    export type SupportedEvent = AppMentionEvent | GenericMessageEvent // | BotMessageEvent | MeMessageEvent | MessageChangedEvent | MessageRepliedEvent
 
-  export interface CompleteFileUploadFile {
-    id: string;
-    title?: string;
-  }
+    export interface EventCallback<T extends SlackEvent = SupportedEvent> {
+        token: string;
+        team_id: string;
+        enterprise_id?: string;
+        api_app_id: string;
+        event: T;
+        type: 'event_callback';
+        event_id: string;
+        event_time: number;
+        is_ext_shared_channel?: boolean;
+        authorizations?: Authorization[];
+    }
 
-  export interface User {
-    id?: string;
-    team_id?: string;
-    name?: string;
-    deleted?: boolean;
-    color?: string;
-    real_name?: string;
-    tz?: string;
-    tz_label?: string;
-    tz_offset?: number;
-    profile?: Profile;
-    is_admin?: boolean;
-    is_owner?: boolean;
-    is_primary_owner?: boolean;
-    is_restricted?: boolean;
-    is_ultra_restricted?: boolean;
-    is_bot?: boolean;
-    is_app_user?: boolean;
-    updated?: number;
-    has_2fa?: boolean;
-    locale?: string;
-  }
+    export type IncomingEvent = BlockAction<ButtonAction> | EventCallback<SupportedEvent>;
 
-  export interface Conversation {
-    id: string;
-    created: number;
-    is_archived: boolean;
-    is_im: boolean;
-    is_org_shared: boolean;
-    context_team_id: string;
-    updated: number;
-    user: string;
-    last_read: string;
-    latest: any;
-    unread_count: number;
-    unread_count_display: number;
-    is_open: boolean;
-    properties: any;
-  }
+    /***********************************************************************************************/
+    /* BLOCK AND VIEWS RELATED TYPES                                                                         */
+    /***********************************************************************************************/
 
-  export interface Channel extends Conversation {
-    name: string;
-    is_channel: true;
-    is_group: boolean;
-    is_mpim: boolean;
-    is_private: boolean;
-    is_general: boolean;
-    unlinked: number;
-    name_normalized: string;
-    is_shared: boolean;
-    is_pending_ext_shared: boolean;
-    pending_shared: any[];
-    parent_conversation: any;
-    creator: string;
-    is_ext_shared: boolean;
-    shared_team_ids: string[];
-    pending_shared_user_ids: any[];
-    is_member: boolean;
-    topic: any;
-    purpose: any;
-    previous_names: any[];
-  }
+    /**
+     * The following Slack Typescript type definitions have been copied from Bolt-JS (<3 thank you)
+     * We are currently not using them all but just in case we would like to expand on them.
+     * 
+     * The MIT License (MIT)
+     * Copyright (c) 2016-2018 Robots & Pencils
+     * Copyright (c) 2019- Slack Technologies, LLC
+     */
 
-  export interface Profile {
-    title?: string;
-    phone?: string;
-    skype?: string;
-    real_name?: string;
-    real_name_normalized?: string;
-    display_name?: string;
-    display_name_normalized?: string;
-    status_text?: string;
-    status_emoji?: string;
-    status_expiration?: number;
-    avatar_hash?: string;
-    image_original?: string;
-    is_custom_image?: boolean;
-    email?: string;
-    first_name?: string;
-    last_name?: string;
-    image_24?: string;
-    image_32?: string;
-    image_48?: string;
-    image_72?: string;
-    image_192?: string;
-    image_512?: string;
-    image_1024?: string;
-    status_text_canonical?: string;
-    team?: string;
-    api_app_id?: string;
-    always_active?: boolean;
-    bot_id?: string;
-  }
-  // IncomingEvents could be payload or command or event (message or attachment or ...):
+    /**
+     * All known actions from in Slack's interactive elements
+     *
+     * This is a discriminated union. The discriminant is the `type` property.
+     */
+    export type BlockElementAction =
+        | ButtonAction
+        | UsersSelectAction
+        | MultiUsersSelectAction
+        | StaticSelectAction
+        | MultiStaticSelectAction
+        | ConversationsSelectAction
+        | MultiConversationsSelectAction
+        | ChannelsSelectAction
+        | MultiChannelsSelectAction
+        | ExternalSelectAction
+        | MultiExternalSelectAction
+        | OverflowAction
+        | DatepickerAction
+        | TimepickerAction
+        | RadioButtonsAction
+        | CheckboxesAction
+        | PlainTextInputAction
+        | RichTextInputAction;
 
-  export interface AuthorizationObject {
-    enterprise_id?: string;
-    team_id?: string;
-    user_id?: string;
-    is_bot: boolean;
-  }
+    /**
+    * Any action from Slack's interactive elements
+    *
+    * This type is used to represent actions that aren't known ahead of time. Each of the known element actions also
+    * implement this interface.
+    */
+    export interface BasicElementAction<T extends string = string> {
+        type: T;
+        // block_id: string;
+        action_id?: string;
+        action_ts?: string;
+    }
 
-  export interface IncomingEvent {
-    // payload?: string;   //JSON.parse(payload): IncomingPayload for payload event
-    type?: EventType;
-    token?: string;
-    team_id?: string;
-    api_app_id?: string; //TODO: validate api_app_id along with token: https://api.slack.com/apis/events-api#the-events-api__receiving-events__callback-field-overview
-    event?: AppHomeOpened | IncomingMessage | IncomingAttachement;
-    eventContext?: string;
-    event_id?: string;
-    event_time?: number;
-    authorizations?: AuthorizationObject[]; //TODO: to verify
-    is_ext_shared_channel?: boolean;
-    context_team_id?: string; //TODO: to verify (added by mtbh)
-    context_enterprise_id?: string; //TODO: to verify (added by mtbh)
-  }
+    /**
+    * An action from a button element
+    */
+    export interface ButtonAction extends BasicElementAction<'button'> {
+        value?: string;
+        text: PlainTextElement;
+        url?: string;
+        confirm?: Confirmation;
+    }
 
-  export interface ElementObject {
-    type: string;
-    text?: string;
-    name?: string;
-  }
+    /**
+    * An action from a select menu with static options
+    */
+    export interface StaticSelectAction extends BasicElementAction<'static_select'> {
+        selected_option: {
+            text: PlainTextElement;
+            value: string;
+        };
+        initial_option?: Option;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
 
-  export interface BlockObject {
-    type: string;
-    block_id: string;
-    elements: [
-      {
+    /**
+    * An action from a multi select menu with static options
+    */
+    export interface MultiStaticSelectAction extends BasicElementAction<'multi_static_select'> {
+        selected_options: {
+            text: PlainTextElement;
+            value: string;
+        }[];
+        initial_options?: Option[];
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a select menu with user list
+    */
+    export interface UsersSelectAction extends BasicElementAction<'users_select'> {
+        selected_user: string;
+        initial_user?: string;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a multi select menu with user list
+    */
+    export interface MultiUsersSelectAction extends BasicElementAction<'multi_users_select'> {
+        selected_users: string[];
+        initial_users?: string[];
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a select menu with conversations list
+    */
+    export interface ConversationsSelectAction extends BasicElementAction<'conversations_select'> {
+        selected_conversation: string;
+        initial_conversation?: string;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a multi select menu with conversations list
+    */
+    export interface MultiConversationsSelectAction extends BasicElementAction<'multi_conversations_select'> {
+        selected_conversations: string[];
+        initial_conversations?: string[];
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a select menu with channels list
+    */
+    export interface ChannelsSelectAction extends BasicElementAction<'channels_select'> {
+        selected_channel: string;
+        initial_channel?: string;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a multi select menu with channels list
+    */
+    export interface MultiChannelsSelectAction extends BasicElementAction<'multi_channels_select'> {
+        selected_channels: string[];
+        initial_channels?: string[];
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a select menu with external data source
+    */
+    export interface ExternalSelectAction extends BasicElementAction<'external_select'> {
+        selected_option?: Option;
+        initial_option?: Option;
+        placeholder?: PlainTextElement;
+        min_query_length?: number;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a multi select menu with external data source
+    */
+    export interface MultiExternalSelectAction extends BasicElementAction<'multi_external_select'> {
+        selected_options?: Option[];
+        initial_options?: Option[];
+        placeholder?: PlainTextElement;
+        min_query_length?: number;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from an overflow menu element
+    */
+    export interface OverflowAction extends BasicElementAction<'overflow'> {
+        selected_option: {
+            text: PlainTextElement;
+            value: string;
+        };
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a date picker element
+    */
+    export interface DatepickerAction extends BasicElementAction<'datepicker'> {
+        selected_date: string | null;
+        initial_date?: string;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a time picker element
+    */
+    export interface TimepickerAction extends BasicElementAction<'timepicker'> {
+        selected_time: string | null;
+        initial_time?: string;
+        placeholder?: PlainTextElement;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a radio button element
+    */
+    export interface RadioButtonsAction extends BasicElementAction<'radio_buttons'> {
+        selected_option: Option | null;
+        initial_option?: Option;
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a checkboxes element
+    */
+    export interface CheckboxesAction extends BasicElementAction<'checkboxes'> {
+        selected_options: Option[];
+        initial_options?: Option[];
+        confirm?: Confirmation;
+    }
+
+    /**
+    * An action from a plain_text_input element (must use dispatch_action: true)
+    */
+    export interface PlainTextInputAction extends BasicElementAction<'plain_text_input'> {
+        value: string;
+    }
+
+    /**
+    * An action from a rich_text_input element (must use dispatch_action: true)
+    */
+    export interface RichTextInputAction extends BasicElementAction<'rich_text_input'> {
+        rich_text_value: RichTextBlock;
+    }
+
+    /**
+    * A Slack Block Kit element action wrapped in the standard metadata.
+    *
+    * This describes the entire JSON-encoded body of a request from Slack's Block Kit interactive components.
+    */
+    export interface BlockAction<ElementAction extends BasicElementAction = BlockElementAction> {
+        type: 'block_actions';
+        actions: ElementAction[];
+        team: {
+            id: string;
+            domain: string;
+            enterprise_id?: string; // undocumented
+            enterprise_name?: string; // undocumented
+        } | null;
+        user: {
+            id: string;
+            /**
+             * name will be present if the block_action originates from the Home tab
+             */
+            name?: string;
+            username: string;
+            team_id?: string;
+        };
+        channel?: {
+            id: string;
+            name: string;
+        };
+        // TODO: breaking change: this should not be optional, but should be conditionally tacked on based on the specific block_action subtype
+        message?: {
+            type: 'message';
+            user?: string; // undocumented that this is optional, it won't be there for bot messages
+            ts: string;
+            text?: string; // undocumented that this is optional, but how could it exist on block kit based messages?
+            // biome-ignore lint/suspicious/noExplicitAny: TODO: poorly typed message here
+            [key: string]: any;
+        };
+        view?: ViewOutput;
+        state?: {
+            values: {
+                [blockId: string]: {
+                    [actionId: string]: ViewStateValue;
+                };
+            };
+        };
+        token: string;
+        response_url: string;
+        trigger_id: string;
+        api_app_id: string;
+
+        // TODO: we'll need to fill this out a little more carefully in the future, possibly using a generic parameter
+        container: Record<string, any>;
+
+        // biome-ignore lint/suspicious/noExplicitAny: TODO: this appears in the block_suggestions schema, but we're not sure when its present or what its type would be
+        app_unfurl?: any;
+
+        // exists for enterprise installs
+        is_enterprise_install?: boolean;
+        enterprise?: {
+            id: string;
+            name: string;
+        };
+    }
+
+    /*
+    * Aliases - these types help make common usages shorter and less intimidating.
+    */
+    export type BlockButtonAction = BlockAction<ButtonAction>;
+    export type BlockStaticSelectAction = BlockAction<StaticSelectAction>;
+    export type BlockUsersSelectAction = BlockAction<UsersSelectAction>;
+    export type BlockConversationsSelectAction = BlockAction<ConversationsSelectAction>;
+    export type BlockChannelsSelectAction = BlockAction<ChannelsSelectAction>;
+    export type BlockExternalSelectAction = BlockAction<ExternalSelectAction>;
+    export type BlockOverflowAction = BlockAction<OverflowAction>;
+    export type BlockDatepickerAction = BlockAction<DatepickerAction>;
+    export type BlockTimepickerAction = BlockAction<TimepickerAction>;
+    export type BlockRadioButtonsAction = BlockAction<RadioButtonsAction>;
+    export type BlockCheckboxesAction = BlockAction<CheckboxesAction>;
+    export type BlockPlainTextInputAction = BlockAction<PlainTextInputAction>;
+
+    /**
+ * Known view action types
+ */
+    export type SlackViewAction =
+        | ViewSubmitAction
+        | ViewClosedAction
+        | ViewWorkflowStepSubmitAction // TODO: remove workflow step stuff in bolt v5
+        | ViewWorkflowStepClosedAction;
+    // <ViewAction extends SlackViewAction = ViewSubmitAction>
+    // TODO: add a type parameter here, just like the other constraint interfaces have.
+    export interface ViewConstraints {
+        callback_id?: string | RegExp;
+        type?: 'view_closed' | 'view_submission';
+    }
+
+    export interface ViewResponseUrl {
+        block_id: string;
+        action_id: string;
+        channel_id: string;
+        response_url: string;
+    }
+
+    // TODO: "Action" naming here is confusing. this is a view submisson event. already exists in @slack/types
+    /**
+    * A Slack view_submission event wrapped in the standard metadata.
+    *
+    * This describes the entire JSON-encoded body of a view_submission event.
+    */
+    export interface ViewSubmitAction {
+        type: 'view_submission';
+        team: {
+            id: string;
+            domain: string;
+            enterprise_id?: string; // undocumented
+            enterprise_name?: string; // undocumented
+        } | null;
+        user: {
+            id: string;
+            name: string;
+            team_id?: string; // undocumented
+        };
+        view: ViewOutput;
+        api_app_id: string;
+        token: string;
+        trigger_id: string; // undocumented
+        // exists for enterprise installs
+        is_enterprise_install?: boolean;
+        enterprise?: {
+            id: string;
+            name: string;
+        };
+        response_urls?: ViewResponseUrl[];
+    }
+
+    /**
+    * A Slack view_closed event wrapped in the standard metadata.
+    *
+    * This describes the entire JSON-encoded body of a view_closed event.
+    */
+    export interface ViewClosedAction {
+        type: 'view_closed';
+        team: {
+            id: string;
+            domain: string;
+            enterprise_id?: string; // undocumented
+            enterprise_name?: string; // undocumented
+        } | null;
+        user: {
+            id: string;
+            name: string;
+            team_id?: string; // undocumented
+        };
+        view: ViewOutput;
+        api_app_id: string;
+        token: string;
+        is_cleared: boolean;
+        // exists for enterprise installs
+        is_enterprise_install?: boolean;
+        enterprise?: {
+            id: string;
+            name: string;
+        };
+    }
+
+    /**
+    * A Slack view_submission step from app event
+    *
+    * This describes the additional JSON-encoded body details for a step's view_submission event
+    * @deprecated Steps from Apps are no longer supported and support for them will be removed in the next major bolt-js
+    * version.
+    */
+    export interface ViewWorkflowStepSubmitAction extends ViewSubmitAction {
+        trigger_id: string;
+        response_urls?: ViewResponseUrl[];
+        workflow_step: {
+            workflow_step_edit_id: string;
+            workflow_id: string;
+            step_id: string;
+        };
+    }
+
+    /**
+    * A Slack view_closed step from app event
+    *
+    * This describes the additional JSON-encoded body details for a step's view_closed event
+    * @deprecated Steps from Apps are no longer supported and support for them will be removed in the next major bolt-js
+    * version.
+    */
+    export interface ViewWorkflowStepClosedAction extends ViewClosedAction {
+        workflow_step: {
+            workflow_step_edit_id: string;
+            workflow_id: string;
+            step_id: string;
+        };
+    }
+
+    export interface ViewStateSelectedOption {
+        text: PlainTextElement;
+        value: string;
+    }
+
+    // TODO: this should probably exist in @slack/types
+    export interface UploadedFile {
+        id: string;
+        created: number;
+        timestamp: number;
+        name: string;
+        title: string;
+        filetype: string;
+        mimetype: string;
+        permalink: string;
+        url_private: string;
+        url_private_download: string;
+        user: string;
+        user_team: string;
+        username?: string;
+        access?: string;
+        alt_txt?: string;
+        app_id?: string;
+        app_name?: string;
+        bot_id?: string;
+        channel_actions_count?: number;
+        channel_actions_ts?: string;
+        channels?: string[];
+        comments_count?: number;
+        converted_pdf?: string;
+        deanimate?: string;
+        deanimate_gif?: string;
+        display_as_bot?: boolean;
+        duration_ms?: number;
+        edit_link?: string;
+        editable?: boolean;
+        editor?: string;
+        external_id?: string;
+        external_type?: string;
+        external_url?: string;
+        file_access?: string;
+        groups?: string[];
+        has_more?: boolean;
+        has_more_shares?: boolean;
+        has_rich_preview?: boolean;
+        hls?: string;
+        hls_embed?: string;
+        image_exif_rotation?: number;
+        ims?: string[];
+        is_channel_space?: boolean;
+        is_external?: boolean;
+        is_public?: boolean;
+        is_starred?: boolean;
+        last_editor?: string;
+        last_read?: number;
+        lines?: number;
+        lines_more?: number;
+        linked_channel_id?: string;
+        media_display_type?: string;
+        mode?: string;
+        mp4?: string;
+        mp4_low?: string;
+        non_owner_editable?: boolean;
+        num_stars?: number;
+        org_or_workspace_access?: string;
+        original_attachment_count?: number;
+        original_h?: string;
+        original_w?: string;
+        permalink_public?: string;
+        pinned_to?: string[];
+        pjpeg?: string;
+        plain_text?: string;
+        pretty_type?: string;
+        preview?: string;
+        preview_highlight?: string;
+        preview_is_truncated?: boolean;
+        preview_plain_text?: string;
+        private_channels_with_file_access_count?: number;
+        public_url_shared?: boolean;
+        simplified_html?: string;
+        size?: number;
+        source_team?: string;
+        subject?: string;
+        subtype?: string;
+        thumb_1024?: string;
+        thumb_1024_gif?: string;
+        thumb_1024_h?: string;
+        thumb_1024_w?: string;
+        thumb_160?: string;
+        thumb_160_gif?: string;
+        thumb_160_h?: string;
+        thumb_160_w?: string;
+        thumb_360?: string;
+        thumb_360_gif?: string;
+        thumb_360_h?: string;
+        thumb_360_w?: string;
+        thumb_480?: string;
+        thumb_480_gif?: string;
+        thumb_480_h?: string;
+        thumb_480_w?: string;
+        thumb_64?: string;
+        thumb_64_gif?: string;
+        thumb_64_h?: string;
+        thumb_64_w?: string;
+        thumb_720?: string;
+        thumb_720_gif?: string;
+        thumb_720_h?: string;
+        thumb_720_w?: string;
+        thumb_80?: string;
+        thumb_800?: string;
+        thumb_800_gif?: string;
+        thumb_800_h?: string;
+        thumb_800_w?: string;
+        thumb_80_gif?: string;
+        thumb_80_h?: string;
+        thumb_80_w?: string;
+        thumb_960?: string;
+        thumb_960_gif?: string;
+        thumb_960_h?: string;
+        thumb_960_w?: string;
+        thumb_gif?: string;
+        thumb_pdf?: string;
+        thumb_pdf_h?: string;
+        thumb_pdf_w?: string;
+        thumb_tiny?: string;
+        thumb_video?: string;
+        thumb_video_h?: number;
+        thumb_video_w?: number;
+        updated?: number;
+        url_static_preview?: string;
+        vtt?: string;
+    }
+
+    export interface ViewStateValue {
         type: string;
-        elements: ElementObject[];
-      },
-    ];
-  }
+        value?: string | null;
+        selected_date?: string | null;
+        selected_time?: string | null;
+        selected_date_time?: number | null; // UNIX timestamp value
+        selected_conversation?: string | null;
+        selected_channel?: string | null;
+        selected_user?: string | null;
+        selected_option?: ViewStateSelectedOption | null;
+        selected_conversations?: string[];
+        selected_channels?: string[];
+        selected_users?: string[];
+        selected_options?: ViewStateSelectedOption[];
+        rich_text_value?: RichTextBlock;
+        files?: UploadedFile[]; // type: "file_input"
+    }
 
-  export interface Event {
-    api_app_id: string;
-    type: SlackType;
-    event_ts?: string;
-    user?: string;
-    ts?: string;
-    app_id?: string; // only for echo messages
+    export interface ViewOutput {
+        id: string;
+        callback_id: string;
+        team_id: string;
+        app_installed_team_id?: string;
+        app_id: string | null;
+        bot_id: string;
+        title: PlainTextElement;
+        type: string;
+        blocks: (KnownBlock | Block)[];
+        close: PlainTextElement | null;
+        submit: PlainTextElement | null;
+        state: {
+            values: {
+                [blockId: string]: {
+                    [actionId: string]: ViewStateValue;
+                };
+            };
+        };
+        hash: string;
+        private_metadata: string;
+        root_view_id: string | null;
+        previous_view_id: string | null;
+        clear_on_close: boolean;
+        notify_on_close: boolean;
+        external_id?: string;
+    }
 
-    client_msg_id?: string;
+    export interface ViewUpdateResponseAction {
+        response_action: 'update';
+        view: View;
+    }
 
-    response_url?: string;
-    original_message?: Event;
+    export interface ViewPushResponseAction {
+        response_action: 'push';
+        view: View;
+    }
 
-    mid?: string;
-    bot_id?: string;
-    subtype?: string;
-    actions?: Payload[]; //for payload events
-    text?: string; // mtbh: in INcomingAttachement??
-    files?: File[]; // mtbh: in INcomingAttachement??
+    export interface ViewClearResponseAction {
+        response_action: 'clear';
+    }
 
-    team?: string;
-    blocks?: BlockObject[];
-    channel?: string;
-    attachments?: MessageAttachment[];
-    channel_type?: 'im' | 'mpim' | 'private' | 'public' | 'channel';
-  }
+    export interface ViewErrorsResponseAction {
+        response_action: 'errors';
+        errors: {
+            [blockId: string]: string;
+        };
+    }
 
-  export enum SubtypeEvent { //TODmtbh: in INcomingAttachement??O: add more subtypes (like "message_replied")
-    echo_message = 'bot_message',
-    file_share = 'file_share',
-    message_changed = 'message_changed', //payload buttons
-    message_deleted = 'message_deleted',
-  }
-
-  export interface AppHomeOpened extends Event {
-    type: SlackType.app_home_opened;
-    tab: string;
-  }
-
-  export interface IncomingMessage extends Event {
-    type: SlackType.incoming_message;
-    client_msg_id: string;
-    blocks: BlockObject[]; //TODO: redundant, is this in IncomingMessage or Event?
-  }
-
-  export interface IncomingAttachement extends Event {
-    type: SlackType.incoming_message;
-    files: File[];
-    upload?: boolean;
-    display_as_bot?: boolean;
-    subtype: Slack.SubtypeEvent.file_share;
-  }
-
-  export interface ImageFile extends File {
-    original_h: number;
-    original_w: number;
-    thumb_tiny: string;
-    [key: `thumb_${number}`]: string | number;
-    [key: `thumb_${number}_w`]: number;
-    [key: `thumb_${number}_h`]: number;
-  }
-
-  export interface TextFile extends File {
-    preview: string;
-    preview_highlight: string;
-    preview_is_truncated: boolean;
-    lines: number;
-    lines_more: number;
-  }
-
-  export interface File {
-    created: number;
-    display_as_bot?: boolean;
-    edit_link?: string;
-    editable?: boolean;
-    external_type?: string;
-    file_access: string;
-    file_type: string;
-    has_rich_preview?: boolean;
-    id: string;
-    is_external?: boolean;
-    is_public?: boolean;
-
-    mimetype: string;
-    mode: string;
-    name: string;
-
-    permalink: string;
-    permalink_public: string;
-    pretty_type: string;
-
-    public_url_shared?: boolean;
-    size: number;
-    timestamp: number;
-    title: string;
-    url_private: string;
-    url_private_download: string;
-    user: string;
-    userTeam: string;
-    username: string;
-  }
-
-  export interface Payload {
-    name?: string;
-    type: string;
-    value: string;
-    action_id?: string;
-    block_id?: string;
-    text?: {
-      type: string;
-      text: string;
-      emoji: boolean;
-    };
-    action_ts?: string;
-  }
-
-  export interface IncomingPayload {
-    api_app_id: string;
-    type: SlackType.interactive_message | SlackType.block_actions;
-    actions: Payload[];
-    callback_id: string;
-    team: {
-      id: string;
-      domain: string;
-    };
-    channel: {
-      id: string;
-      name: string;
-    };
-    user: {
-      id: string;
-      name: string;
-      username: string;
-      team_id: string;
-    };
-    message_ts: string;
-    token: string;
-    is_app_unfurl: boolean;
-    original_message: Event;
-    response_url: string;
-    action_ts?: string;
-    trigger_id: string;
-    attachment_id?: string;
-  }
-
-  export interface PayloadEvent {
-    payload: string;
-  }
-
-  export interface CommandEvent {
-    api_app_id: string;
-    channel_id: string;
-    channel_name?: string;
-    command: string;
-    response_url?: string;
-    team_domain?: string;
-    team_id?: string;
-    text: string;
-    token: string;
-    trigger_id?: string;
-    user_id: string;
-    user_name?: string;
-  }
-
-  export interface URLVerificationEvent {
-    token: string;
-    challenge: string;
-    type: EventType.url_verification;
-  }
-
-  export type BodyEvent = IncomingEvent | PayloadEvent | CommandEvent;
-
-  export interface OutgoingMessage {
-    channel?: string;
-    text?: string;
-    attachments?: MessageAttachment[];
-    blocks?: KnownBlock[];
-    file?: UploadFileObject;
-    initial_comment?: string; //a message before the file
-    title?: string;
-  }
-
-  export interface AttachmentMessage extends OutgoingMessage {
-    attachments: MessageAttachment[];
-  }
-
-  export interface TextMessage extends OutgoingMessage {
-    text: string;
-  }
-
-  export interface BlockMessage extends OutgoingMessage {
-    blocks: KnownBlock[];
-  }
-
-  export interface FileMessage extends OutgoingMessage {
-    channels?: string;
-    file?: UploadFileObject;
-    filename?: string;
-    filetype?: string;
-    content?: any;
-    initial_comment?: string; //a message before the file
-    title?: string; //title or filename
-  }
-
-  export type OutgoingMessageData =
-    | TextMessage
-    | AttachmentMessage
-    | BlockMessage
-    | FileMessage;
-
-  export interface ImageElement {
-    type: 'image';
-    image_url: string;
-    alt_text: string;
-  }
-
-  export interface PlainTextElement {
-    type: 'plain_text';
-    text: string;
-    emoji?: boolean;
-  }
-
-  export interface MrkdwnElement {
-    type: 'mrkdwn';
-    text: string;
-    verbatim?: boolean;
-  }
-
-  export interface Option {
-    text: PlainTextElement | MrkdwnElement;
-    value?: string;
-    url?: string;
-    description?: PlainTextElement;
-  }
-
-  export interface Confirm {
-    title?: PlainTextElement;
-    text: PlainTextElement | MrkdwnElement;
-    confirm?: PlainTextElement;
-    deny?: PlainTextElement;
-    style?: 'primary' | 'danger';
-  }
-
-  /*
-   * Action Types
-   */
-
-  export interface Action {
-    type: string;
-    action_id?: string;
-  }
-
-  export interface Button extends Action {
-    type: 'button';
-    name?: string;
-    text: PlainTextElement | string;
-    value?: string;
-    url?: string;
-    style?: 'default' | 'danger' | 'primary';
-    confirm?: Confirmation;
-  }
-
-  /*/ UploadFile Object */
-
-  export interface UploadFileObject {
-    value: any;
-    options?: {
-      filename?: string;
-      filetype?: any;
-    };
-  }
-
-  /*
-   * Block Types
-   */
-
-  export type KnownBlock =
-    | ContextBlock
-    | ImageBlock
-    | ActionsBlock
-    | DividerBlock
-    | SectionBlock
-    | FileBlock
-    | HeaderBlock
-    | InputBlock
-    | RichTextBlock;
-  //| VideoBlock
-
-  export interface Block {
-    type: string;
-    block_id?: string;
-  }
-
-  export interface ContextBlock extends Block {
-    type: 'context';
-    elements: (PlainTextElement | MrkdwnElement | ImageElement)[];
-  }
-
-  export interface HeaderBlock extends Block {
-    type: 'header';
-    text: PlainTextElement;
-  }
-
-  export type ImageBlock = ImageBlockWithUrl | ImageBlockWithSlackFile;
-
-  export interface ImageBlockBase extends Block {
-    type: 'image';
-    alt_text: string;
-    title?: PlainTextElement;
-  }
-
-  export interface ImageBlockWithUrl extends ImageBlockBase {
-    image_url: string;
-    slack_file?: never;
-  }
-
-  export interface ImageBlockWithSlackFile extends ImageBlockBase {
-    image_url?: never;
-    slack_file: SlackFile;
-  }
-
-  export interface ActionsBlock extends Block {
-    type: 'actions';
-    elements: (Button | Action)[];
-  }
-
-  export interface DividerBlock extends Block {
-    type: 'divider';
-  }
-
-  export interface SectionBlock extends Block {
-    type: 'section';
-    text?: PlainTextElement | MrkdwnElement; // either this or fields must be defined
-    fields?: (PlainTextElement | MrkdwnElement)[]; // either this or text must be defined
-    accessory?: Button | Action | ImageElement;
-    expand?: boolean;
-  }
-
-  export interface FileBlock extends Block {
-    type: 'file';
-    source: string; // 'remote'
-    external_id: string;
-  }
-
-  export interface InputBlock extends Block {
-    type: 'input';
-    label: PlainTextElement;
-    element: any; //TODO: block element https://api.slack.com/reference/block-kit/block-elements
-    dispatch_action?: boolean;
-    hint?: PlainTextElement;
-    optional?: boolean;
-  }
-
-  export interface RichTextBlock extends Block {
-    type: 'rich_text';
-    elements: any[]; //TODO: replace any with rich text elements: https://api.slack.com/reference/block-kit/blocks#rich_fields
-  }
-
-  export type SlackFile = { id: string } | { url: string };
-
-  export interface MessageAttachment {
-    blocks?: (KnownBlock | Block)[];
-    id?: string;
-    fallback?: string; // either this or text must be defined
-    color?: 'good' | 'warning' | 'danger' | string;
-    pretext?: string;
-    attachment_type?: string | 'default';
-    author_name?: string;
-    author_link?: string; // author_name must be present
-    author_icon?: string; // author_name must be present
-    title?: string;
-    title_link?: string; // title must be present
-    text?: string; // either this or fallback must be defined
-    fields?: {
-      title: string;
-      value: string;
-      short?: boolean;
-    }[];
-    image_url?: string;
-    thumb_url?: string;
-    footer?: string;
-    footer_icon?: string; // footer must be present
-    ts?: string;
-    actions?: (AttachmentAction | Button)[] | boolean;
-    callback_id?: string;
-    mrkdwn_in?: ('pretext' | 'text' | 'fields')[];
-  }
-
-  export interface AttachmentAction {
-    id?: string;
-    confirm?: Confirmation;
-    data_source?:
-      | 'static'
-      | 'channels'
-      | 'conversations'
-      | 'users'
-      | 'external';
-    min_query_length?: number;
-    name?: string;
-    options?: OptionField[];
-    option_groups?: {
-      text: string;
-      options: OptionField[];
-    }[];
-    selected_options?: OptionField[];
-    style?: 'default' | 'primary' | 'danger';
-    text: string;
-    type: 'button' | 'select';
-    value?: string;
-    url?: string;
-  }
-
-  export interface OptionField {
-    description?: string;
-    text: string;
-    value: string;
-  }
-
-  export interface Confirmation {
-    dismiss_text?: string;
-    ok_text?: string;
-    text: string;
-    title?: string;
-  }
-
-  export type RequestBody = OutgoingMessageData | Profile | Action | {};
-
-  export type HomeTabView = {
-    type: 'home';
-    blocks: KnownBlock[];
-    private_metadata?: string;
-    callback_id?: string;
-    external_id?: string;
-  };
-
-  export type ModalView = {
-    type: 'modal';
-    title: PlainTextElement;
-    blocks: KnownBlock[];
-    close: PlainTextElement;
-    submit: PlainTextElement;
-    private_metadata?: string;
-    callback_id?: string;
-    clear_on_close?: boolean;
-    notify_on_close?: boolean;
-    external_id?: string;
-    submit_disabled?: boolean;
-  };
+    export type ViewResponseAction =
+        | ViewUpdateResponseAction
+        | ViewPushResponseAction
+        | ViewClearResponseAction
+        | ViewErrorsResponseAction;
 }

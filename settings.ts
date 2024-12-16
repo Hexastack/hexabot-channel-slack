@@ -9,13 +9,13 @@
 import { ChannelSetting } from '@/channel/types';
 import { SettingType } from '@/setting/schemas/types';
 
-import { Slack } from './types';
+import * as SlackTypes from '@slack/types';
 
 export const SLACK_CHANNEL_NAME = 'slack-channel';
 
 export const SLACK_CHANNEL_NAMESPACE = 'slack_channel';
 
-export const DEFAULT_HOME_TAB_CONTENT: Slack.KnownBlock[] = [
+export const DEFAULT_HOME_TAB_CONTENT: SlackTypes.KnownBlock[] = [
   {
     type: 'header',
     text: {
@@ -31,18 +31,25 @@ export const DEFAULT_HOME_TAB_CONTENT: Slack.KnownBlock[] = [
     type: 'section',
     text: {
       type: 'mrkdwn',
-      text: 'Welcome to *Hexabot!*\n',
+      text: 'Welcome to *Hexabot*!\n',
     },
   },
 ];
 
 export enum SettingLabel {
+  app_id = 'app_id',
   access_token = 'access_token',
   signing_secret = 'signing_secret',
   home_tab_content = 'home_tab_content',
 }
 
 export default [
+  {
+    group: SLACK_CHANNEL_NAMESPACE,
+    label: SettingLabel.app_id,
+    value: '',
+    type: SettingType.text,
+  },
   {
     group: SLACK_CHANNEL_NAMESPACE,
     label: SettingLabel.access_token,

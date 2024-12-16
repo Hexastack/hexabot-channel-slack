@@ -1,5 +1,5 @@
 {
-  "access_token": "Le jeton qui sera envoyé à Slack pour authentifier l'application",
-  "signing_secret": "Le secret qui sera utilisé pour vérifier l'authenticité des requêtes de Slack",
-  "home_tab_content": "Le contenu qui sera affiché dans l'onglet Accueil de l'application Slack. Le format du contenu doit être un tableau JSON de blocs Slack"
+  "access_token": "Le jeton qui sera envoyé à Slack pour authentifier l'application.",
+  "signing_secret": "Le secret qui sera utilisé pour vérifier l'authenticité des requêtes de Slack.",
+  "home_tab_content": "Le contenu qui sera affiché dans l'onglet Accueil de l'application Slack. Le format du contenu doit être un tableau JSON de blocs Slack."
 }
