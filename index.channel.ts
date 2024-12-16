@@ -13,6 +13,8 @@ import { createHmac } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import tsscmp from 'tsscmp';
 import { v4 as uuidv4 } from 'uuid';
+import * as SlackTypes from '@slack/types';
+import { UsersInfoResponse, WebClient } from '@slack/web-api';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import { AttachmentService } from '@/attachment/services/attachment.service';
@@ -37,10 +39,8 @@ import { MenuService } from '@/cms/services/menu.service';
 import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
 import { SettingService } from '@/setting/services/setting.service';
-
 import { SecretSetting, TextareaSetting } from '@/setting/schemas/types';
-import * as SlackTypes from '@slack/types';
-import { UsersInfoResponse, WebClient } from '@slack/web-api';
+
 import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
 import SlackEventWrapper from './wrapper';

@@ -1,8 +1,10 @@
 # Hexabot SLack Channel Extension
 
-The Slack Channel Extension for Hexabot AI Chatbot / Agent Builder
+The Slack Channel Extension for Hexabot AI Chatbot / Agent Builder.
 
 This guide walks you through integrating Slack with your Hexabot project. With this integration, you can connect your chatbot to a Slack workspace and enable seamless interactions.
+
+Once integrated you will be able to interact with Bot either via direct message or invite him to a channel and mention him (Example @YOUR_APP_NAME). 
 
 ## Prerequisites
 
