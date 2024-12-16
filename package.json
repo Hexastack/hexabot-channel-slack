@@ -1,0 +1,10 @@
+{
+  "name": "hexabot-channel-slack",
+  "version": "1.0.0",
+  "description": "Slack Channel Extension for Hexabot Chatbot Builder",
+  "dependencies": {
+    "tsscmp": "^1.0.6"
+  },
+  "author": "Hexastack",
+  "license": "AGPL-3.0-only"
+}
