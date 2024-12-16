@@ -1,8 +1,10 @@
 # Hexabot SLack Channel Extension
 
-The Slack Channel Extension for Hexabot Chatbot / Agent Builder
+The Slack Channel Extension for Hexabot AI Chatbot / Agent Builder.
 
-This guide walks you through integrating Slack with [Your Chatbot Builder Name]. With this integration, you can connect your chatbot to a Slack workspace and enable seamless interaction.
+This guide walks you through integrating Slack with your Hexabot project. With this integration, you can connect your chatbot to a Slack workspace and enable seamless interactions.
+
+Once integrated you will be able to interact with Bot either via direct message or invite him to a channel and mention him (Example @YOUR_APP_NAME). 
 
 ## Prerequisites
 
@@ -24,7 +26,7 @@ You have two options to create a Slack app: **From Scratch** or **From Manifest*
 
 #### Option 1: Create App From Scratch
 
-1. Go to [Slack API Apps]() and click **Create New App** .
+1. Go to [Slack API Apps](https://api.slack.com/apps) and click **Create New App** .
 
 2. Choose **From Scratch** .
 
@@ -62,13 +64,6 @@ You have two options to create a Slack app: **From Scratch** or **From Manifest*
   - `message.im`
 
   4. Save your changes.
-
-- **Interactivity** :
-
-  1. Navigate to **Interactivity & Shortcuts** in the sidebar.
-  2. Enable interactivity and set the **Request URL** to `{your api domain}/webhook/slack`.
-
-  3. Save your changes.
 
 - **App Home** :
 
@@ -119,9 +114,6 @@ settings:
       - app_home_opened
       - app_mention
       - message.im
-  interactivity:
-    is_enabled: true
-    request_url: { your api domain }/webhook/slack
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false
@@ -143,16 +135,18 @@ Both approaches lead to the same result, so choose based on your familiarity and
 - **Retrieve Required Credentials** :
 
   - After installation, navigate to the **Basic Information** section of your app.
-  - Copy the **Signing Secret** .
+  - Copy the **App ID** and **Signing Secret**.
   - Go to the **OAuth & Permissions** section and copy the **Bot User OAuth Token**.
 
 - **Configure Hexabot** :
 
   - Go to your **Hexabot Settings** page and open the **Slack Tab** .
-  - Paste the **Slack App Access Token** and **Signing Secret** into their respective fields.
+  - Paste the **App ID**, **Slack App Access Token** and **Signing Secret** into their respective fields.
 
 - **Complete the Setup** :
 
   - Save the configuration, and you're all set!
 
   - Your Slack app is now ready to work with Hexabot.
+
+  - Send a direct message to your chatbot, or invite to any channel and mention him for interactions.
