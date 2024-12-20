@@ -6,15 +6,16 @@
  * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
  */
 
+import { createHmac } from 'crypto';
+
 import { HttpService } from '@nestjs/axios';
 import { Injectable, RawBodyRequest } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { createHmac } from 'crypto';
+import * as SlackTypes from '@slack/types';
+import { UsersInfoResponse, WebClient } from '@slack/web-api';
 import { NextFunction, Request, Response } from 'express';
 import tsscmp from 'tsscmp';
 import { v4 as uuidv4 } from 'uuid';
-import * as SlackTypes from '@slack/types';
-import { UsersInfoResponse, WebClient } from '@slack/web-api';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import { AttachmentService } from '@/attachment/services/attachment.service';
@@ -38,8 +39,8 @@ import { MenuTree, MenuType } from '@/cms/schemas/types/menu';
 import { MenuService } from '@/cms/services/menu.service';
 import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
-import { SettingService } from '@/setting/services/setting.service';
 import { SecretSetting, TextareaSetting } from '@/setting/schemas/types';
+import { SettingService } from '@/setting/services/setting.service';
 
 import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
@@ -73,7 +74,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * Logs a debug message indicating the initialization of the Slack Channel Handler
    */
   async init(): Promise<void> {
-    this.logger.setContext('Slack Channel Handler');
     this.logger.debug('Initializing...');
     const settings = await this.getSettings();
     this.homeTabContent = this.parseHomeTabContent(settings?.home_tab_content);
@@ -85,7 +85,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param e - The Slack event to check.
    * @returns - Returns `true` if the event is of type `app_home_opened`, otherwise `false`.
    */
-  isAppHomeOpenedEvent(e: Slack.EventCallback<SlackTypes.SlackEvent>): e is Slack.EventCallback<SlackTypes.AppHomeOpenedEvent> {
+  isAppHomeOpenedEvent(
+    e: Slack.EventCallback<SlackTypes.SlackEvent>,
+  ): e is Slack.EventCallback<SlackTypes.AppHomeOpenedEvent> {
     return e.event.type === 'app_home_opened';
   }
 
@@ -94,15 +96,21 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    *
    * @returns - Returns `true` if the event is supported
    */
-  isSupportedEvent(e: Slack.EventCallback<SlackTypes.SlackEvent>): e is Slack.EventCallback<Slack.SupportedEvent> {
-    return [
-      'message',
-      'app_mention',
-    ].includes(e.event.type) && e.type === 'event_callback'
+  isSupportedEvent(
+    e: Slack.EventCallback<SlackTypes.SlackEvent>,
+  ): e is Slack.EventCallback<Slack.SupportedEvent> {
+    return (
+      ['message', 'app_mention'].includes(e.event.type) &&
+      e.type === 'event_callback'
+    );
   }
 
-  isEvent(data: Slack.BlockAction<Slack.ButtonAction> | Slack.EventCallback<SlackTypes.SlackEvent>): data is Slack.EventCallback<SlackTypes.SlackEvent> {
-    return 'event' in data
+  isEvent(
+    data:
+      | Slack.BlockAction<Slack.ButtonAction>
+      | Slack.EventCallback<SlackTypes.SlackEvent>,
+  ): data is Slack.EventCallback<SlackTypes.SlackEvent> {
+    return 'event' in data;
   }
 
   /**
@@ -117,26 +125,29 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       const { event } = data;
       // Check if both `text` and `files` exist
       if ('text' in event && 'files' in event) {
-        const { text, files, ...restEvent } = event as SlackTypes.GenericMessageEvent;
+        const { text, files, ...restEvent } =
+          event as SlackTypes.GenericMessageEvent;
 
         // Create two payloads: one with text, another with files
-        const textPayload: Slack.EventCallback<SlackTypes.GenericMessageEvent> = {
-          ...data,
-          event: {
-            ...restEvent,
-            text,
-            files: undefined, // Exclude files in this part
-          },
-        };
+        const textPayload: Slack.EventCallback<SlackTypes.GenericMessageEvent> =
+          {
+            ...data,
+            event: {
+              ...restEvent,
+              text,
+              files: undefined, // Exclude files in this part
+            },
+          };
 
-        const filesPayload: Slack.EventCallback<SlackTypes.GenericMessageEvent> = {
-          ...data,
-          event: {
-            ...restEvent,
-            text: undefined, // Exclude text in this part
-            files: files,
-          },
-        };
+        const filesPayload: Slack.EventCallback<SlackTypes.GenericMessageEvent> =
+          {
+            ...data,
+            event: {
+              ...restEvent,
+              text: undefined, // Exclude text in this part
+              files,
+            },
+          };
 
         return [textPayload, filesPayload];
       }
@@ -161,7 +172,14 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       return res.status(200).send(req.body.challenge);
     }
 
-    const data = 'payload' in req.body ? JSON.parse(req.body.payload) as Slack.BlockAction<Slack.ButtonAction> : this.isEvent(req.body) ? req.body : undefined;
+    const data =
+      'payload' in req.body
+        ? (JSON.parse(
+            req.body.payload,
+          ) as Slack.BlockAction<Slack.ButtonAction>)
+        : this.isEvent(req.body)
+          ? req.body
+          : undefined;
 
     if (!data) {
       this.logger.debug('Unknown event!');
@@ -199,7 +217,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       } catch (error) {
         this.logger.error('Something went wrong while handling events', error);
       }
-    })
+    });
 
     return res.status(200).send('');
   }
@@ -210,15 +228,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param data - The event data to check.
    * @returns - Returns `true` if the event is of type `url_verification`, otherwise `false`.
    */
-  isUrlVerificationEvent(
-    data: any,
-  ): data is Slack.URLVerificationEvent {
+  isUrlVerificationEvent(data: any): data is Slack.URLVerificationEvent {
     return 'type' in data && data.type === 'url_verification';
   }
 
   /**
    * Generates a unique ID for the Slack Channel Handler
-   * 
+   *
    * @returns - A unique ID
    */
   private _generateId(): string {
@@ -239,7 +255,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     const text = message.text.replaceAll('**', '*');
     return {
       text,
-    }
+    };
   }
 
   /**
@@ -260,23 +276,22 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         text: message.text,
       },
     };
-    const elements: SlackTypes.ActionsBlockElement[] = message.quickReplies.map((qr) => {
-      return {
-        type: 'button',
-        text: {
-          type: 'plain_text',
-          text: qr.title,
-          emoji: true,
-        },
-        value: qr.payload,
-      };
-    });
+    const elements: SlackTypes.ActionsBlockElement[] = message.quickReplies.map(
+      (qr) => {
+        return {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: qr.title,
+            emoji: true,
+          },
+          value: qr.payload,
+        };
+      },
+    );
 
     return {
-      blocks: [
-        textSection,
-        { type: 'actions', elements }
-      ],
+      blocks: [textSection, { type: 'actions', elements }],
     };
   }
 
@@ -299,31 +314,33 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         text: message.text,
       },
     };
-    const elements: SlackTypes.ActionsBlockElement[] = message.buttons.map((btn) => {
-      // TODO: handle non compact urls with link unfurling: https://api.slack.com/reference/messaging/link-unfurling#event_deliveries
-      if (btn.type === ButtonType.web_url) {
-        return {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: btn.title,
-            emoji: true,
-          },
-          value: 'url',
-          url: btn.url,
-        };
-      } else {
-        return {
-          type: 'button',
-          text: {
-            type: 'plain_text',
-            text: btn.title,
-            emoji: true,
-          },
-          value: btn.payload,
-        };
-      }
-    });
+    const elements: SlackTypes.ActionsBlockElement[] = message.buttons.map(
+      (btn) => {
+        // TODO: handle non compact urls with link unfurling: https://api.slack.com/reference/messaging/link-unfurling#event_deliveries
+        if (btn.type === ButtonType.web_url) {
+          return {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: btn.title,
+              emoji: true,
+            },
+            value: 'url',
+            url: btn.url,
+          };
+        } else {
+          return {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: btn.title,
+              emoji: true,
+            },
+            value: btn.payload,
+          };
+        }
+      },
+    );
     return {
       blocks: [textSection, { type: 'actions', elements }],
     };
@@ -354,7 +371,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param options - Might contain additional settings
    * @returns - A Blocks array of Slack elements
    */
-  _formatElements(data: any[], options: BlockOptions, ...args: any): SlackTypes.KnownBlock[] {
+  _formatElements(
+    data: any[],
+    options: BlockOptions,
+    ...args: any
+  ): SlackTypes.KnownBlock[] {
     const fields = options.content.fields;
     const buttons = options.content.buttons;
     //To build a list :
@@ -442,9 +463,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     const data = message.elements || [];
     const pagination = message.pagination;
     let buttons: SlackTypes.ActionsBlock = {
-      type: 'actions',
-      elements: [],
-    },
+        type: 'actions',
+        elements: [],
+      },
       elements: Array<SlackTypes.KnownBlock> = [];
 
     // Items count min check
@@ -545,31 +566,31 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
     // Deal with attachment uploads
     if (envelope.format === OutgoingMessageFormat.attachment) {
-      const attachment = envelope.message.attachment.payload
+      const attachment = envelope.message.attachment.payload;
       const result = await this.api.filesUploadV2({
         filename: attachment.name,
         // You can use a ReadStream or a Buffer for the file option
         // This file is located in the current directory (`process.pwd()`), so the relative path resolves
         file: await this.attachmentService.readAsBuffer(attachment),
-        channel_id: channel
-      })
+        channel_id: channel,
+      });
 
       if (!result.ok) {
         this.logger.error('Unable to send attachment', result.error);
-        throw new Error('Unable to send attachment')
+        throw new Error('Unable to send attachment');
       }
     }
 
     if (message) {
       const data = await this.api.chat.postMessage({
         ...message,
-        channel
+        channel,
       });
 
       return { mid: data.message.ts };
     }
 
-    return { mid: this._generateId() }
+    return { mid: this._generateId() };
   }
 
   /**
@@ -588,7 +609,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       const userInfo = await this.api.users.info({ user: userId });
 
       if (!userInfo.ok) {
-        this.logger.error('Unable to retrieve user info', userInfo.error)
+        this.logger.error('Unable to retrieve user info', userInfo.error);
         throw new Error('Unable to retrieve user info');
       }
 
@@ -600,7 +621,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         foreign_id: channelId,
         first_name:
           profile.first_name || profile.display_name || profile.real_name,
-        last_name: profile.last_name || profile.display_name || profile.real_name,
+        last_name:
+          profile.last_name || profile.display_name || profile.real_name,
         timezone: userInfo.user.tz_offset,
         gender: profile.pronouns,
         channel: event.getChannelData(),
@@ -614,12 +636,15 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         retainedFrom: new Date(),
       };
     } else {
-      const convInfo = await this.api.conversations.info(
-        { channel: event.getSenderForeignId() },
-      );
+      const convInfo = await this.api.conversations.info({
+        channel: event.getSenderForeignId(),
+      });
 
       if (!convInfo.ok) {
-        this.logger.error('Unable to retrieve conversation info', convInfo.error)
+        this.logger.error(
+          'Unable to retrieve conversation info',
+          convInfo.error,
+        );
         throw new Error('Unable to retrieve conversation info');
       }
 
@@ -649,7 +674,10 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    *
    * @param user - The end user's profile data
    */
-  async uploadProfilePicture(user: UsersInfoResponse['user'], channelId: string) {
+  async uploadProfilePicture(
+    user: UsersInfoResponse['user'],
+    channelId: string,
+  ) {
     //get the image_* with the highest resolution
     const imageAttribute = Object.keys(user.profile)
       .filter((key) => key.startsWith('image_'))
@@ -687,7 +715,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   async setHomeTab(userId: string) {
     const menuTree = await this.menuService.getTree();
 
-    const view = this.formatHomeTab(menuTree)
+    const view = this.formatHomeTab(menuTree);
     const data = await this.api.views.publish({
       view,
       user_id: userId,
@@ -696,7 +724,10 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     if (!data.ok) {
       const errors = data.response_metadata.messages;
       await this.api.views.publish({
-        view: this.formatHomeTab(menuTree, this.buildInvalidContentBlocks(errors)),
+        view: this.formatHomeTab(
+          menuTree,
+          this.buildInvalidContentBlocks(errors),
+        ),
         user_id: userId,
       });
     }
@@ -712,20 +743,23 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     menuTree: MenuTree,
     homeTabContent: SlackTypes.KnownBlock[] = this.homeTabContent,
   ): Slack.HomeTabView {
-    const menuBlocks: SlackTypes.KnownBlock[] = menuTree.length > 0 ? [
-      {
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: 'Menu:',
-          emoji: true,
-        },
-      },
-      {
-        type: 'divider',
-      },
-      ...this.formatMenuBlocks(menuTree),
-    ] : [];
+    const menuBlocks: SlackTypes.KnownBlock[] =
+      menuTree.length > 0
+        ? [
+            {
+              type: 'header',
+              text: {
+                type: 'plain_text',
+                text: 'Menu:',
+                emoji: true,
+              },
+            },
+            {
+              type: 'divider',
+            },
+            ...this.formatMenuBlocks(menuTree),
+          ]
+        : [];
 
     return {
       type: 'home',
@@ -745,7 +779,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * takes an array of errors and returns a formatted block
    *
    * @param errors
-   * 
+   *
    * @returns Slack blocks showing the errors
    */
   buildInvalidContentBlocks(errors: string[]): SlackTypes.KnownBlock[] {
@@ -753,21 +787,21 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       const errorMessages = errors?.join('\n');
       const errorsBlock: SlackTypes.KnownBlock[] = errorMessages
         ? [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: '*Errors:*',
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: '*Errors:*',
+              },
             },
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `\`\`\`${errorMessages}\`\`\``,
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: `\`\`\`${errorMessages}\`\`\``,
+              },
             },
-          },
-        ]
+          ]
         : [];
 
       return [
@@ -805,7 +839,10 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param level
    * @returns
    */
-  formatMenuBlocks(menuTree: MenuTree, level: number = 0): SlackTypes.KnownBlock[] {
+  formatMenuBlocks(
+    menuTree: MenuTree,
+    level: number = 0,
+  ): SlackTypes.KnownBlock[] {
     const levelTab = '│       ';
     const blocks = menuTree.reduce((acc, item, index) => {
       const text =
@@ -877,7 +914,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * Parses the content of the home tab.
    *
    * @param content - The content of the home tab
-   * 
+   *
    * @returns Slack Blocks for the home tab
    */
   parseHomeTabContent(content: string): SlackTypes.KnownBlock[] {
@@ -926,7 +963,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const settings = await this.getSettings()
+      const settings = await this.getSettings();
       this.verifySlackRequest({
         signingSecret: settings.signing_secret,
         body: req.rawBody,
@@ -952,10 +989,10 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    *
    * @param options - The request verification options.
    */
-  public verifySlackRequest(
-    options: Slack.RequestVerificationOptions,
-  ): void {
-    const requestTimestampSec = parseInt(options.headers['x-slack-request-timestamp'].toString());
+  public verifySlackRequest(options: Slack.RequestVerificationOptions): void {
+    const requestTimestampSec = parseInt(
+      options.headers['x-slack-request-timestamp'].toString(),
+    );
     const signature = options.headers['x-slack-signature'].toString();
 
     if (!requestTimestampSec || !signature) {
