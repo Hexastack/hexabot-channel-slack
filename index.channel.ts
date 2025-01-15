@@ -365,7 +365,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ): Promise<Slack.OutgoingMessage> {
     return this._quickRepliesFormat({
       text: '📄',
-      quickReplies: message.quickReplies,
+      quickReplies: message.quickReplies || [],
     });
   }
 
@@ -380,14 +380,15 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     data: any[],
     options: BlockOptions,
   ): Promise<SlackTypes.KnownBlock[]> {
-    const fields = options.content.fields;
-    const buttons = options.content.buttons;
+    const fields = options.content?.fields;
+    const buttons = options.content?.buttons || [];
     //To build a list :
     const blocks: SlackTypes.KnownBlock[] = [{ type: 'divider' }];
     for (const item of data) {
-      const text = item[fields.subtitle]
-        ? '*' + item[fields.title] + '*\n' + item[fields.subtitle]
-        : '*' + item[fields.title] + '*';
+      const text =
+        fields?.subtitle && item[fields.subtitle]
+          ? '*' + item[fields.title] + '*\n' + item[fields.subtitle]
+          : '*' + item.title + '*';
       //Block containing the title and subtitle and image
       const main_block: SlackTypes.SectionBlock = {
         type: 'section',
@@ -397,7 +398,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         },
       };
 
-      if (item[fields.image_url]) {
+      if (fields?.image_url && item[fields.image_url]) {
         const url =
           typeof item[fields.image_url] === 'string'
             ? item[fields.image_url]
@@ -410,16 +411,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       }
       blocks.push(main_block);
       //Array of elements : Buttons
-      const elements = [];
+      const elements: SlackTypes.ActionsBlockElement[] = [];
       buttons.forEach((button, index) => {
         const btn = { ...button };
         // Set custom title for first button if provided
-        if (index === 0 && fields.action_title && item[fields.action_title]) {
+        if (index === 0 && fields?.action_title && item[fields.action_title]) {
           btn.title = item[fields.action_title];
         }
         if (btn.type === ButtonType.web_url) {
           // Get built-in or an exter nal URL from custom field
-          const urlField = fields.url;
+          const urlField = fields?.url;
           btn.url = urlField && item[urlField] ? item[urlField] : '';
           if (!btn.url.startsWith('http')) {
             btn.url = 'https://' + btn.url;
@@ -572,9 +573,19 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ) {
     if ('id' in attachmentRef && attachmentRef.id) {
       const attachment = await this.attachmentService.findOne(attachmentRef.id);
+
+      if (!attachment) {
+        throw new Error(`Unable to find attachment ${attachmentRef.id}`);
+      }
+
       const file = await this.attachmentService.readAsStream(attachment);
+
+      if (!file) {
+        throw new Error(`Unable to read attachment ${attachmentRef.id} file`);
+      }
+
       return await this.api.filesUploadV2({
-        filename: attachment.name,
+        filename: attachment?.name,
         file,
         channel_id: channelId,
       });
@@ -632,7 +643,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         channel: channelId,
       });
 
-      return { mid: data.message.ts };
+      return { mid: data.message?.ts || this._generateId() };
     }
 
     return { mid: this._generateId() };
@@ -672,6 +683,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
       return files;
     }
+
+    return [];
   }
 
   /**
@@ -730,23 +743,29 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         throw new Error('Unable to retrieve user info');
       }
 
-      const profile = userInfo.user.profile;
+      const profile = userInfo.user?.profile;
 
       event.setProfile(profile);
 
       return {
         foreign_id: channelId,
         first_name:
-          profile.first_name || profile.display_name || profile.real_name,
+          profile?.first_name ||
+          profile?.display_name ||
+          profile?.real_name ||
+          'Anonymous',
         last_name:
-          profile.last_name || profile.display_name || profile.real_name,
-        timezone: userInfo.user.tz_offset,
-        gender: profile.pronouns,
+          profile?.last_name ||
+          profile?.display_name ||
+          profile?.real_name ||
+          'Anonymous',
+        timezone: userInfo.user?.tz_offset,
+        gender: profile?.pronouns,
         channel: event.getChannelData(),
         assignedAt: null,
         assignedTo: null,
         labels: [],
-        locale: userInfo.user.locale,
+        locale: userInfo.user?.locale,
         language: defautLanguage.code,
         country: '',
         lastvisit: new Date(),
@@ -770,7 +789,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       return {
         foreign_id: channelId,
         first_name: '#',
-        last_name: channel.name,
+        last_name: channel?.name || 'Unknown',
         gender: 'Unknown',
         timezone: 0,
         channel: event.getChannelData(),
@@ -840,11 +859,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     });
 
     if (!data.ok) {
-      const errors = data.response_metadata.messages;
+      const errors = data.response_metadata?.messages;
       await this.api.views.publish({
         view: this.formatHomeTab(
           menuTree,
-          this.buildInvalidContentBlocks(errors),
+          errors ? this.buildInvalidContentBlocks(errors) : [],
         ),
         user_id: userId,
       });
@@ -1015,16 +1034,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             type: 'section',
             text: {
               type: 'mrkdwn',
-
               text,
             },
           },
-
-          ...this.formatMenuBlocks(item.call_to_actions, level + 1),
+          ...(item.call_to_actions
+            ? this.formatMenuBlocks(item.call_to_actions || [], level + 1)
+            : []),
         );
       }
       return acc;
-    }, []);
+    }, [] as SlackTypes.KnownBlock[]);
     return blocks;
   }
 
@@ -1041,6 +1060,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       if (Array.isArray(parsedContent)) {
         return parsedContent as any as SlackTypes.KnownBlock[];
       }
+      return [];
     } catch (e) {
       this.logger.warn('Invalid home tab content, using default content.');
       return this.buildInvalidContentBlocks(['Invalid JSON array']);
@@ -1084,10 +1104,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       const settings = await this.getSettings();
       this.verifySlackRequest({
         signingSecret: settings.signing_secret,
-        body: req.rawBody,
+        body: req.rawBody as Buffer,
         headers: {
-          'x-slack-signature': req.headers['x-slack-signature'],
-          'x-slack-request-timestamp': req.headers['x-slack-request-timestamp'],
+          'x-slack-signature': req.headers['x-slack-signature'] as string,
+          'x-slack-request-timestamp': req.headers[
+            'x-slack-request-timestamp'
+          ] as string,
         },
       });
       next();

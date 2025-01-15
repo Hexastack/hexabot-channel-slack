@@ -6,11 +6,11 @@
  * 2. All derivative works must include clear attribution to the original creator and software, Hexastack and Hexabot, in a prominent location (e.g., in the software's "About" section, documentation, and README file).
  */
 
-import { UsersInfoResponse } from '@slack/web-api';
+import { Profile as SlackProfile } from '@slack/web-api/dist/types/response/UsersInfoResponse';
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import EventWrapper from '@/channel/lib/EventWrapper';
-import { AttachmentPayload, FileType } from '@/chat/schemas/types/attachment';
+import { FileType } from '@/chat/schemas/types/attachment';
 import {
   IncomingMessageType,
   PayloadType,
@@ -61,7 +61,7 @@ export default class SlackEventWrapper extends EventWrapper<
   typeof SLACK_CHANNEL_NAME,
   SlackHandler
 > {
-  private profile: UsersInfoResponse['user']['profile'] = undefined;
+  private profile: SlackProfile | undefined = undefined;
 
   /**
    * Constructor; Channel's event wrapper
@@ -99,7 +99,7 @@ export default class SlackEventWrapper extends EventWrapper<
    *
    * @param userInfos The subscriber user infos
    */
-  setProfile(userInfos: UsersInfoResponse['user']['profile']) {
+  setProfile(userInfos: SlackProfile | undefined) {
     this.profile = userInfos;
   }
 
@@ -108,7 +108,7 @@ export default class SlackEventWrapper extends EventWrapper<
    *
    * @returns The subscriber user profile
    */
-  getProfile(): UsersInfoResponse['user']['profile'] {
+  getProfile(): SlackProfile | undefined {
     return this.profile;
   }
 
@@ -119,7 +119,7 @@ export default class SlackEventWrapper extends EventWrapper<
    * @returns A Slack channel type.
    */
   static getChannelType(e: Slack.IncomingEvent): Slack.ChannelTypes {
-    if (e.type === 'block_actions') {
+    if (e.type === 'block_actions' && e.channel?.id) {
       return e.channel.id.startsWith('D') ? 'im' : 'channel';
     } else if (e.type === 'event_callback') {
       const event = e.event;
@@ -130,6 +130,7 @@ export default class SlackEventWrapper extends EventWrapper<
         return event.channel.startsWith('D') ? 'im' : 'channel';
       }
     }
+    throw new Error('Unable to extract the channel type');
   }
 
   /**
@@ -140,9 +141,10 @@ export default class SlackEventWrapper extends EventWrapper<
   getId(): string {
     if (this._adapter.raw.type === 'event_callback') {
       return this._adapter.raw.event.ts;
-    } else {
+    } else if (this._adapter.raw.message?.ts) {
       return this._adapter.raw.message.ts;
     }
+    throw new Error('Unable to extract ID');
   }
 
   /**
@@ -158,7 +160,7 @@ export default class SlackEventWrapper extends EventWrapper<
 
       if (e.type === 'block_actions') {
         return e.user.id;
-      } else if (e.type === 'event_callback') {
+      } else if (e.type === 'event_callback' && e.event.user) {
         return e.event.user;
       }
     }
@@ -174,7 +176,7 @@ export default class SlackEventWrapper extends EventWrapper<
   getSenderForeignId(): string {
     const e = this._adapter.raw;
 
-    if (e.type === 'block_actions') {
+    if (e.type === 'block_actions' && e.channel?.id) {
       return e.channel.id;
     } else if (e.type === 'event_callback') {
       return e.event.channel;
@@ -191,7 +193,7 @@ export default class SlackEventWrapper extends EventWrapper<
   getRecipientForeignId(): string {
     const e = this._adapter.raw;
 
-    if (e.type === 'block_actions') {
+    if (e.type === 'block_actions' && e.channel?.id) {
       return e.channel.id;
     } else if (e.type === 'event_callback') {
       return e.event.channel;
@@ -256,7 +258,7 @@ export default class SlackEventWrapper extends EventWrapper<
     switch (this._adapter.messageType) {
       case IncomingMessageType.message:
         return {
-          text: this.removeSlackMentions(this._adapter.raw.event.text),
+          text: this.removeSlackMentions(this._adapter.raw.event.text || ''),
         };
 
       case IncomingMessageType.postback:
@@ -301,18 +303,6 @@ export default class SlackEventWrapper extends EventWrapper<
   }
 
   /**
-   * Returns the list of received attachments
-   *
-   * @returns Received attachments message
-   */
-  getAttachments(): AttachmentPayload[] {
-    const message: StdIncomingMessage = this.getMessage();
-    return message && 'attachment' in message
-      ? [].concat(message.attachment)
-      : [];
-  }
-
-  /**
    * Returns the list of delivered messages
    *
    * @returns Array of message ids
@@ -329,21 +319,12 @@ export default class SlackEventWrapper extends EventWrapper<
   getWatermark(): number {
     if (this._adapter.messageType === IncomingMessageType.message) {
       return parseInt(this._adapter.raw.event.event_ts);
-    } else if (this._adapter.messageType === IncomingMessageType.postback) {
+    } else if (
+      this._adapter.messageType === IncomingMessageType.postback &&
+      this._adapter.raw.actions[0]?.action_ts
+    ) {
       return parseInt(this._adapter.raw.actions[0]?.action_ts);
     }
     return 0;
-  }
-
-  /**
-   * Returns the response URL
-   *
-   * @returns The response URL
-   */
-  getResponseUrl(): string {
-    if (this._adapter.messageType === IncomingMessageType.postback) {
-      return this._adapter.raw.response_url;
-    }
-    return undefined;
   }
 }
