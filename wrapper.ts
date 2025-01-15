@@ -8,10 +8,7 @@
 
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import EventWrapper from '@/channel/lib/EventWrapper';
-import {
-  AttachmentForeignKey,
-  AttachmentPayload,
-} from '@/chat/schemas/types/attachment';
+import { AttachmentPayload, FileType } from '@/chat/schemas/types/attachment';
 import {
   IncomingMessageType,
   PayloadType,
@@ -20,40 +17,48 @@ import {
 } from '@/chat/schemas/types/message';
 import { Payload } from '@/chat/schemas/types/quick-reply';
 
-import * as SlackTypes from '@slack/types';
 import { SlackHandler } from './index.channel';
 import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
 
-type SlackEventAdapter = {
-  eventType: StdEventType.unknown;
-  messageType: never;
-  raw: Slack.IncomingEvent;
-} | {
-  eventType: StdEventType.echo;
-  messageType: IncomingMessageType.message;
-  raw: Slack.EventCallback<Slack.SupportedEvent>
-} | {
-  eventType: StdEventType.message;
-  messageType: IncomingMessageType.message;
-  raw: Slack.EventCallback<Slack.SupportedEvent>
-} | {
-  eventType: StdEventType.message;
-  messageType: IncomingMessageType.attachments;
-  raw: Slack.EventCallback<Slack.SupportedEvent>
-} | {
-  eventType: StdEventType.message;
-  messageType: IncomingMessageType.postback;
-  raw: Slack.BlockAction<Slack.ButtonAction>
-};
+type SlackEventAdapter =
+  | {
+      eventType: StdEventType.unknown;
+      messageType: never;
+      raw: Slack.IncomingEvent;
+      attachments: never;
+    }
+  | {
+      eventType: StdEventType.echo;
+      messageType: IncomingMessageType.message;
+      raw: Slack.EventCallback<Slack.SupportedEvent>;
+      attachments: never;
+    }
+  | {
+      eventType: StdEventType.message;
+      messageType: IncomingMessageType.message;
+      raw: Slack.EventCallback<Slack.SupportedEvent>;
+      attachments: never;
+    }
+  | {
+      eventType: StdEventType.message;
+      messageType: IncomingMessageType.attachments;
+      raw: Slack.EventCallback<Slack.SupportedEvent>;
+      attachments: Attachment[];
+    }
+  | {
+      eventType: StdEventType.message;
+      messageType: IncomingMessageType.postback;
+      raw: Slack.BlockAction<Slack.ButtonAction>;
+      attachments: never;
+    };
 
 export default class SlackEventWrapper extends EventWrapper<
   SlackEventAdapter,
   Slack.IncomingEvent,
-  typeof SLACK_CHANNEL_NAME
+  typeof SLACK_CHANNEL_NAME,
+  SlackHandler
 > {
-  private readonly appId: string;
-
   /**
    * Constructor; Channel's event wrapper
    *
@@ -71,7 +76,9 @@ export default class SlackEventWrapper extends EventWrapper<
       this._adapter.eventType = StdEventType.message;
       this._adapter.messageType = IncomingMessageType.postback;
     } else if (e.type === 'event_callback') {
-      this._adapter.eventType = e.event.bot_id ? StdEventType.echo : StdEventType.message;
+      this._adapter.eventType = e.event.bot_id
+        ? StdEventType.echo
+        : StdEventType.message;
       if (e.event.files) {
         this._adapter.messageType = IncomingMessageType.attachments;
       } else {
@@ -83,11 +90,37 @@ export default class SlackEventWrapper extends EventWrapper<
     this._adapter.raw = e;
   }
 
+  /**
+   * Fetches and storees received Slack attachments
+   */
+  async preprocess() {
+    if (
+      this._adapter.eventType === StdEventType.message &&
+      this._adapter.messageType === IncomingMessageType.attachments
+    ) {
+      const files = this._adapter.raw.event.files as Slack.UploadedFile[];
+      this._adapter.attachments = await Promise.all(
+        files.map((file) => {
+          return this._handler.fetchAndStoreAttachment(
+            file.url_private,
+            file.name,
+          );
+        }),
+      );
+    }
+  }
+
+  /**
+   * Get channel type for a given event.
+   *
+   * @param e An incoming Slack event.
+   * @returns A Slack channel type.
+   */
   static getChannelType(e: Slack.IncomingEvent): Slack.ChannelTypes {
     if (e.type === 'block_actions') {
       return e.channel.id.startsWith('D') ? 'im' : 'channel';
     } else if (e.type === 'event_callback') {
-      const event = e.event
+      const event = e.event;
       if (event.type === 'message') {
         return event.channel_type;
       } else {
@@ -128,7 +161,7 @@ export default class SlackEventWrapper extends EventWrapper<
       }
     }
 
-    throw new Error('Unable to extract user id!')
+    throw new Error('Unable to extract user id!');
   }
 
   /**
@@ -144,7 +177,7 @@ export default class SlackEventWrapper extends EventWrapper<
     } else if (e.type === 'event_callback') {
       return e.event.channel;
     } else {
-      throw new Error('Unable to extract conversation id!')
+      throw new Error('Unable to extract conversation id!');
     }
   }
 
@@ -161,7 +194,7 @@ export default class SlackEventWrapper extends EventWrapper<
     } else if (e.type === 'event_callback') {
       return e.event.channel;
     } else {
-      throw new Error('Unable to extract channel id!')
+      throw new Error('Unable to extract channel id!');
     }
   }
 
@@ -173,27 +206,39 @@ export default class SlackEventWrapper extends EventWrapper<
   getPayload(): Payload | string | undefined {
     if (this._adapter.eventType === StdEventType.message) {
       if (this._adapter.messageType === IncomingMessageType.postback) {
-        return this._adapter.raw.actions[0]?.value
-      }
-      else if (this._adapter.messageType === IncomingMessageType.attachments) {
-        const e = this._adapter.raw.event as SlackTypes.GenericMessageEvent;
-        if (e.files && e.files[0]) {
-          const attachment = e.files[0];
-          const mimetype: boolean | string = attachment.mimetype;
-
+        return this._adapter.raw.actions[0]?.value;
+      } else if (
+        this._adapter.messageType === IncomingMessageType.attachments
+      ) {
+        if (
+          !this._adapter.attachments ||
+          this._adapter.attachments.length === 0
+        ) {
           return {
             type: PayloadType.attachments,
             attachments: {
-              type: Attachment.getTypeByMime(mimetype),
+              type: FileType.unknown,
               payload: {
-                url: attachment.url_private,
+                id: null,
               },
             },
           };
-        } 
+        }
+
+        const attachment = this._adapter.attachments[0];
+
+        return {
+          type: PayloadType.attachments,
+          attachments: {
+            type: Attachment.getTypeByMime(attachment.type),
+            payload: {
+              id: attachment.id,
+            },
+          },
+        };
       }
     }
-    return undefined
+    return undefined;
   }
 
   removeSlackMentions(text: string): string {
@@ -219,27 +264,37 @@ export default class SlackEventWrapper extends EventWrapper<
         };
 
       case IncomingMessageType.attachments:
-        const attachments = this._adapter.raw.event.files as unknown as Slack.UploadedFile[];
-        let serialized_text = 'attachment:';
+        if (
+          !this._adapter.attachments ||
+          this._adapter.attachments.length === 0
+        ) {
+          return {
+            type: PayloadType.attachments,
+            serialized_text: 'attachment:unknown',
+            attachment: [],
+          };
+        }
 
-        const file_path = attachments[0].url_private;
-        const mimetype = attachments[0].mimetype;
-
-        serialized_text += `${Attachment.getTypeByMime(mimetype)}:${file_path}`; //TODO: ?? serialized_text only for the first attachment??
-        const stdAttachments = attachments.map((att) => ({
-          type: Attachment.getTypeByMime(att.mimetype),
-          payload: {
-            url: att.url_private,
+        const attachmentPayloads = this._adapter.attachments.map(
+          (attachment) => {
+            const type = Attachment.getTypeByMime(attachment.type);
+            return {
+              type,
+              payload: { id: attachment.id },
+            };
           },
-        }));
+        );
 
         return {
           type: PayloadType.attachments,
-          serialized_text,
-          attachment: stdAttachments,
+          serialized_text: `attachment:${attachmentPayloads[0].type}:${this._adapter.attachments[0].name}`,
+          attachment:
+            attachmentPayloads.length === 1
+              ? attachmentPayloads[0]
+              : attachmentPayloads,
         };
       case IncomingMessageType.postback:
-        throw new Error('Unable to extract message')
+        throw new Error('Unable to extract message');
     }
   }
 
@@ -248,9 +303,11 @@ export default class SlackEventWrapper extends EventWrapper<
    *
    * @returns Received attachments message
    */
-  getAttachments(): AttachmentPayload<AttachmentForeignKey>[] {
+  getAttachments(): AttachmentPayload[] {
     const message: StdIncomingMessage = this.getMessage();
-    return message && 'attachment' in message ? [].concat(message.attachment) : [];
+    return message && 'attachment' in message
+      ? [].concat(message.attachment)
+      : [];
   }
 
   /**
@@ -269,9 +326,9 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   getWatermark(): number {
     if (this._adapter.messageType === IncomingMessageType.message) {
-      return parseInt(this._adapter.raw.event.event_ts)
+      return parseInt(this._adapter.raw.event.event_ts);
     } else if (this._adapter.messageType === IncomingMessageType.postback) {
-      return parseInt(this._adapter.raw.actions[0]?.action_ts)
+      return parseInt(this._adapter.raw.actions[0]?.action_ts);
     }
     return 0;
   }
@@ -283,8 +340,8 @@ export default class SlackEventWrapper extends EventWrapper<
    */
   getResponseUrl(): string {
     if (this._adapter.messageType === IncomingMessageType.postback) {
-      return this._adapter.raw.response_url
+      return this._adapter.raw.response_url;
     }
-    return undefined
+    return undefined;
   }
 }
