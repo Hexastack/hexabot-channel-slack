@@ -13,18 +13,21 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, RawBodyRequest } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import * as SlackTypes from '@slack/types';
-import { UsersInfoResponse, WebClient } from '@slack/web-api';
+import { WebClient } from '@slack/web-api';
 import { NextFunction, Request, Response } from 'express';
 import tsscmp from 'tsscmp';
 import { v4 as uuidv4 } from 'uuid';
 
+import { AttachmentMetadataDto } from '@/attachment/dto/attachment.dto';
 import { AttachmentService } from '@/attachment/services/attachment.service';
+import { AttachmentFile } from '@/attachment/types';
 import { ChannelService } from '@/channel/channel.service';
 import ChannelHandler from '@/channel/lib/Handler';
 import { SubscriberCreateDto } from '@/chat/dto/subscriber.dto';
 import { AttachmentRef } from '@/chat/schemas/types/attachment';
 import { ButtonType } from '@/chat/schemas/types/button';
 import {
+  IncomingMessageType,
   OutgoingMessageFormat,
   StdEventType,
   StdOutgoingAttachmentMessage,
@@ -37,11 +40,11 @@ import {
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { MenuTree, MenuType } from '@/cms/schemas/types/menu';
 import { MenuService } from '@/cms/services/menu.service';
-import { config } from '@/config';
 import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
 import { SecretSetting, TextareaSetting } from '@/setting/schemas/types';
 import { SettingService } from '@/setting/services/setting.service';
+import { PartialExcept } from '@/utils/types/misc';
 
 import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
@@ -60,7 +63,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     protected readonly eventEmitter: EventEmitter2,
     protected readonly httpService: HttpService,
     protected readonly settingsService: SettingService,
-    protected readonly attachmentService: AttachmentService,
+    public readonly attachmentService: AttachmentService,
     protected readonly menuService: MenuService,
     protected readonly languageService: LanguageService,
   ) {
@@ -116,13 +119,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   /**
-   * Pre-Processes the incoming request payload from Slack
+   * Seperate files and text messages in the incoming Slack request payload
    *
    * @param req - The HTTP request object
    * @param res - The HTTP response object
    * @returns An array of payloads
    */
-  preprocess(data: Slack.IncomingEvent): Slack.IncomingEvent[] {
+  separateTextAndAttachments(data: Slack.IncomingEvent): Slack.IncomingEvent[] {
     if (this.isEvent(data)) {
       const { event } = data;
       // Check if both `text` and `files` exist
@@ -204,7 +207,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       return res.status(200).send('');
     }
 
-    const events = this.preprocess(data);
+    const events = this.separateTextAndAttachments(data);
 
     events.forEach((e) => {
       try {
@@ -636,12 +639,84 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   /**
+   * Fetches the remote files by URL.
+   *
+   * @param event - The received message event
+   * @returns - A promise resolving to the metadata of the attachment files.
+   */
+  async getMessageAttachments(
+    event: SlackEventWrapper,
+  ): Promise<AttachmentFile[]> {
+    if (
+      event._adapter.eventType === StdEventType.message &&
+      event._adapter.messageType === IncomingMessageType.attachments
+    ) {
+      const remoteFiles = event._adapter.raw.event
+        .files as Slack.UploadedFile[];
+
+      const files: AttachmentFile[] = [];
+      for (const remoteFile of remoteFiles) {
+        const response = await this.httpService.axiosRef.get<Stream>(
+          remoteFile.url_private,
+          {
+            responseType: 'stream', // Ensures the response is returned as a binary buffer
+          },
+        );
+
+        files.push({
+          file: response.data,
+          size: response.headers['content-length'],
+          type: response.headers['content-type'],
+        });
+      }
+
+      return files;
+    }
+  }
+
+  /**
+   * Fetches the subscriber avatar from Slack
+   *
+   * @param event The message event
+   * @returns The avatar file
+   */
+  async getSubscriberAvatar(
+    event: SlackEventWrapper,
+  ): Promise<AttachmentFile | undefined> {
+    const profile = event.getProfile();
+
+    // Save profile picture locally (messenger URL expires)
+    if (profile) {
+      // Get the image_* with the highest resolution
+      const imageAttribute = Object.keys(profile)
+        .filter((key) => key.startsWith('image_'))
+        .map((key) => parseInt(key.split('_')[1]))
+        .filter((key) => !isNaN(key))
+        .reduce((acc, curr) => (acc > curr ? acc : curr), 0);
+      const imageUrl = profile['image_' + imageAttribute];
+      const response = await this.httpService.axiosRef.get<Stream>(imageUrl, {
+        responseType: 'stream',
+      });
+
+      return {
+        file: response.data,
+        type: response.headers['content-type'],
+        size: parseInt(response.headers['content-length']),
+      };
+    }
+
+    return undefined;
+  }
+
+  /**
    * Fetches the end user profile data
    *
    * @param event - The event to wrap
    * @returns A Promise that resolves to the end user's profile data
    */
-  async getUserData(event: SlackEventWrapper): Promise<SubscriberCreateDto> {
+  async getSubscriberData(
+    event: SlackEventWrapper,
+  ): Promise<SubscriberCreateDto> {
     const { channelType: channelType } = event.getChannelData();
     const channelId = event.getSenderForeignId();
     const defautLanguage = await this.languageService.getDefaultLanguage();
@@ -655,9 +730,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         throw new Error('Unable to retrieve user info');
       }
 
-      const avatar = await this.fetchAndStoreAvatar(userInfo.user, channelId);
-
       const profile = userInfo.user.profile;
+
+      event.setProfile(profile);
 
       return {
         foreign_id: channelId,
@@ -668,7 +743,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         timezone: userInfo.user.tz_offset,
         gender: profile.pronouns,
         channel: event.getChannelData(),
-        avatar: avatar.id,
         assignedAt: null,
         assignedTo: null,
         labels: [],
@@ -720,53 +794,23 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param filename - The attachment filename
    * @returns The stored attachment
    */
-  async fetchAndStoreAttachment(url: string, filename: string) {
+  async fetchAndStoreAttachment(
+    url: string,
+    metadata: PartialExcept<
+      AttachmentMetadataDto,
+      'channel' | 'createdBy' | 'createdByRef' | 'context'
+    >,
+  ) {
     const response = await this.httpService.axiosRef.get<Stream>(url, {
       responseType: 'stream', // Ensures the response is returned as a binary buffer
     });
 
-    return await this.attachmentService.store(
-      response.data,
-      {
-        name: filename,
-        size: parseInt(response.headers['content-length']),
-        type: response.headers['content-type'],
-      },
-      config.parameters.avatarDir,
-    );
-  }
-
-  /**
-   * Fetches and stores the end user's profile picture
-   *
-   * @param user - The end user's profile data
-   * @returns The avatar attachment
-   */
-  async fetchAndStoreAvatar(
-    user: UsersInfoResponse['user'],
-    channelId: string,
-  ) {
-    //get the image_* with the highest resolution
-    const imageAttribute = Object.keys(user.profile)
-      .filter((key) => key.startsWith('image_'))
-      .map((key) => parseInt(key.split('_')[1]))
-      .filter((key) => !isNaN(key))
-      .reduce((acc, curr) => (acc > curr ? acc : curr), 0);
-    const imageUrl = user.profile['image_' + imageAttribute];
-
-    const response = await this.httpService.axiosRef.get<Stream>(imageUrl, {
-      responseType: 'stream', // Ensures the response is returned as a binary buffer
+    return await this.attachmentService.store(response.data, {
+      ...metadata,
+      name: uuidv4(),
+      size: parseInt(response.headers['content-length']),
+      type: response.headers['content-type'],
     });
-
-    return await this.attachmentService.store(
-      response.data,
-      {
-        name: channelId,
-        size: parseInt(response.headers['content-length']),
-        type: response.headers['content-type'],
-      },
-      config.parameters.avatarDir,
-    );
   }
 
   /**
