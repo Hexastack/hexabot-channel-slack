@@ -18,7 +18,6 @@ import { NextFunction, Request, Response } from 'express';
 import tsscmp from 'tsscmp';
 import { v4 as uuidv4 } from 'uuid';
 
-import { AttachmentMetadataDto } from '@/attachment/dto/attachment.dto';
 import { AttachmentService } from '@/attachment/services/attachment.service';
 import { AttachmentFile } from '@/attachment/types';
 import { ChannelService } from '@/channel/channel.service';
@@ -44,7 +43,6 @@ import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
 import { SecretSetting, TextareaSetting } from '@/setting/schemas/types';
 import { SettingService } from '@/setting/services/setting.service';
-import { PartialExcept } from '@/utils/types/misc';
 
 import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
@@ -804,32 +802,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         retainedFrom: new Date(),
       };
     }
-  }
-
-  /**
-   * Fetches and stores the end user's shared file
-   *
-   * @param url - The attachment Slack url
-   * @param filename - The attachment filename
-   * @returns The stored attachment
-   */
-  async fetchAndStoreAttachment(
-    url: string,
-    metadata: PartialExcept<
-      AttachmentMetadataDto,
-      'channel' | 'createdBy' | 'createdByRef' | 'context'
-    >,
-  ) {
-    const response = await this.httpService.axiosRef.get<Stream>(url, {
-      responseType: 'stream', // Ensures the response is returned as a binary buffer
-    });
-
-    return await this.attachmentService.store(response.data, {
-      ...metadata,
-      name: uuidv4(),
-      size: parseInt(response.headers['content-length']),
-      type: response.headers['content-type'],
-    });
   }
 
   /**
