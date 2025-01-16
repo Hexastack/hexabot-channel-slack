@@ -31,6 +31,7 @@ export namespace Slack {
      */
     text: string;
   }
+
   export interface Blocks extends Partial<Text> {
     /**
      * @description An array of structured Blocks.
@@ -38,6 +39,7 @@ export namespace Slack {
      */
     blocks: (KnownBlock | Block)[];
   }
+
   export interface Attachments extends Partial<Text> {
     /**
      * @description An array of structured attachments.
@@ -45,6 +47,7 @@ export namespace Slack {
      */
     attachments: MessageAttachment[];
   }
+
   export type OutgoingMessage = Text | Blocks | Attachments;
 
   export interface RequestVerificationOptions {
@@ -97,6 +100,7 @@ export namespace Slack {
     is_bot: boolean;
     is_enterprise_install?: boolean;
   }
+
   export type ChannelTypes = 'channel' | 'group' | 'im' | 'mpim' | 'app_home';
 
   export type SupportedEvent = AppMentionEvent | GenericMessageEvent; // | BotMessageEvent | MeMessageEvent | MessageChangedEvent | MessageRepliedEvent
@@ -432,17 +436,28 @@ export namespace Slack {
    * Aliases - these types help make common usages shorter and less intimidating.
    */
   export type BlockButtonAction = BlockAction<ButtonAction>;
+
   export type BlockStaticSelectAction = BlockAction<StaticSelectAction>;
+
   export type BlockUsersSelectAction = BlockAction<UsersSelectAction>;
+
   export type BlockConversationsSelectAction =
     BlockAction<ConversationsSelectAction>;
+
   export type BlockChannelsSelectAction = BlockAction<ChannelsSelectAction>;
+
   export type BlockExternalSelectAction = BlockAction<ExternalSelectAction>;
+
   export type BlockOverflowAction = BlockAction<OverflowAction>;
+
   export type BlockDatepickerAction = BlockAction<DatepickerAction>;
+
   export type BlockTimepickerAction = BlockAction<TimepickerAction>;
+
   export type BlockRadioButtonsAction = BlockAction<RadioButtonsAction>;
+
   export type BlockCheckboxesAction = BlockAction<CheckboxesAction>;
+
   export type BlockPlainTextInputAction = BlockAction<PlainTextInputAction>;
 
   /**
@@ -453,6 +468,7 @@ export namespace Slack {
     | ViewClosedAction
     | ViewWorkflowStepSubmitAction // TODO: remove workflow step stuff in bolt v5
     | ViewWorkflowStepClosedAction;
+
   // <ViewAction extends SlackViewAction = ViewSubmitAction>
   // TODO: add a type parameter here, just like the other constraint interfaces have.
   export interface ViewConstraints {
