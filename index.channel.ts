@@ -660,15 +660,19 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       event._adapter.eventType === StdEventType.message &&
       event._adapter.messageType === IncomingMessageType.attachments
     ) {
+      const settings = await this.getSettings();
       const remoteFiles = event._adapter.raw.event
         .files as Slack.UploadedFile[];
 
       const files: AttachmentFile[] = [];
       for (const remoteFile of remoteFiles) {
         const response = await this.httpService.axiosRef.get<Stream>(
-          remoteFile.url_private,
+          remoteFile.url_private_download,
           {
             responseType: 'stream', // Ensures the response is returned as a binary buffer
+            headers: {
+              Authorization: `Bearer ${settings.access_token}`,
+            },
           },
         );
 
