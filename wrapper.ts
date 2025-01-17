@@ -220,7 +220,7 @@ export default class SlackEventWrapper extends EventWrapper<
         ) {
           return {
             type: PayloadType.attachments,
-            attachments: {
+            attachment: {
               type: FileType.unknown,
               payload: {
                 id: null,
@@ -233,7 +233,7 @@ export default class SlackEventWrapper extends EventWrapper<
 
         return {
           type: PayloadType.attachments,
-          attachments: {
+          attachment: {
             type: Attachment.getTypeByMime(attachment.type),
             payload: {
               id: attachment.id,
