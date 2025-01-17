@@ -674,8 +674,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
         files.push({
           file: response.data,
-          size: response.headers['content-length'],
-          type: response.headers['content-type'],
+          size: remoteFile.size || parseInt(response.headers['content-length']),
+          type: remoteFile.mimetype,
         });
       }
 
