@@ -13,18 +13,20 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable, RawBodyRequest } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import * as SlackTypes from '@slack/types';
-import { UsersInfoResponse, WebClient } from '@slack/web-api';
+import { WebClient } from '@slack/web-api';
 import { NextFunction, Request, Response } from 'express';
 import tsscmp from 'tsscmp';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AttachmentService } from '@/attachment/services/attachment.service';
+import { AttachmentFile } from '@/attachment/types';
 import { ChannelService } from '@/channel/channel.service';
 import ChannelHandler from '@/channel/lib/Handler';
 import { SubscriberCreateDto } from '@/chat/dto/subscriber.dto';
 import { AttachmentRef } from '@/chat/schemas/types/attachment';
 import { ButtonType } from '@/chat/schemas/types/button';
 import {
+  IncomingMessageType,
   OutgoingMessageFormat,
   StdEventType,
   StdOutgoingAttachmentMessage,
@@ -37,7 +39,6 @@ import {
 import { BlockOptions } from '@/chat/schemas/types/options';
 import { MenuTree, MenuType } from '@/cms/schemas/types/menu';
 import { MenuService } from '@/cms/services/menu.service';
-import { config } from '@/config';
 import { LanguageService } from '@/i18n/services/language.service';
 import { LoggerService } from '@/logger/logger.service';
 import { SecretSetting, TextareaSetting } from '@/setting/schemas/types';
@@ -60,7 +61,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     protected readonly eventEmitter: EventEmitter2,
     protected readonly httpService: HttpService,
     protected readonly settingsService: SettingService,
-    protected readonly attachmentService: AttachmentService,
+    public readonly attachmentService: AttachmentService,
     protected readonly menuService: MenuService,
     protected readonly languageService: LanguageService,
   ) {
@@ -116,13 +117,13 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   /**
-   * Pre-Processes the incoming request payload from Slack
+   * Seperate files and text messages in the incoming Slack request payload
    *
    * @param req - The HTTP request object
    * @param res - The HTTP response object
    * @returns An array of payloads
    */
-  preprocess(data: Slack.IncomingEvent): Slack.IncomingEvent[] {
+  separateTextAndAttachments(data: Slack.IncomingEvent): Slack.IncomingEvent[] {
     if (this.isEvent(data)) {
       const { event } = data;
       // Check if both `text` and `files` exist
@@ -204,7 +205,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       return res.status(200).send('');
     }
 
-    const events = this.preprocess(data);
+    const events = this.separateTextAndAttachments(data);
 
     events.forEach((e) => {
       try {
@@ -362,7 +363,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ): Promise<Slack.OutgoingMessage> {
     return this._quickRepliesFormat({
       text: '📄',
-      quickReplies: message.quickReplies,
+      quickReplies: message.quickReplies || [],
     });
   }
 
@@ -377,14 +378,15 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     data: any[],
     options: BlockOptions,
   ): Promise<SlackTypes.KnownBlock[]> {
-    const fields = options.content.fields;
-    const buttons = options.content.buttons;
+    const fields = options.content?.fields;
+    const buttons = options.content?.buttons || [];
     //To build a list :
     const blocks: SlackTypes.KnownBlock[] = [{ type: 'divider' }];
     for (const item of data) {
-      const text = item[fields.subtitle]
-        ? '*' + item[fields.title] + '*\n' + item[fields.subtitle]
-        : '*' + item[fields.title] + '*';
+      const text =
+        fields?.subtitle && item[fields.subtitle]
+          ? '*' + item[fields.title] + '*\n' + item[fields.subtitle]
+          : '*' + item.title + '*';
       //Block containing the title and subtitle and image
       const main_block: SlackTypes.SectionBlock = {
         type: 'section',
@@ -394,7 +396,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         },
       };
 
-      if (item[fields.image_url]) {
+      if (fields?.image_url && item[fields.image_url]) {
         const url =
           typeof item[fields.image_url] === 'string'
             ? item[fields.image_url]
@@ -407,16 +409,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       }
       blocks.push(main_block);
       //Array of elements : Buttons
-      const elements = [];
+      const elements: SlackTypes.ActionsBlockElement[] = [];
       buttons.forEach((button, index) => {
         const btn = { ...button };
         // Set custom title for first button if provided
-        if (index === 0 && fields.action_title && item[fields.action_title]) {
+        if (index === 0 && fields?.action_title && item[fields.action_title]) {
           btn.title = item[fields.action_title];
         }
         if (btn.type === ButtonType.web_url) {
           // Get built-in or an exter nal URL from custom field
-          const urlField = fields.url;
+          const urlField = fields?.url;
           btn.url = urlField && item[urlField] ? item[urlField] : '';
           if (!btn.url.startsWith('http')) {
             btn.url = 'https://' + btn.url;
@@ -569,9 +571,19 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   ) {
     if ('id' in attachmentRef && attachmentRef.id) {
       const attachment = await this.attachmentService.findOne(attachmentRef.id);
+
+      if (!attachment) {
+        throw new Error(`Unable to find attachment ${attachmentRef.id}`);
+      }
+
       const file = await this.attachmentService.readAsStream(attachment);
+
+      if (!file) {
+        throw new Error(`Unable to read attachment ${attachmentRef.id} file`);
+      }
+
       return await this.api.filesUploadV2({
-        filename: attachment.name,
+        filename: attachment?.name,
         file,
         channel_id: channelId,
       });
@@ -629,10 +641,86 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         channel: channelId,
       });
 
-      return { mid: data.message.ts };
+      return { mid: data.message?.ts || this._generateId() };
     }
 
     return { mid: this._generateId() };
+  }
+
+  /**
+   * Fetches the remote files by URL.
+   *
+   * @param event - The received message event
+   * @returns - A promise resolving to the metadata of the attachment files.
+   */
+  async getMessageAttachments(
+    event: SlackEventWrapper,
+  ): Promise<AttachmentFile[]> {
+    if (
+      event._adapter.eventType === StdEventType.message &&
+      event._adapter.messageType === IncomingMessageType.attachments
+    ) {
+      const settings = await this.getSettings();
+      const remoteFiles = event._adapter.raw.event
+        .files as Slack.UploadedFile[];
+
+      const files: AttachmentFile[] = [];
+      for (const remoteFile of remoteFiles) {
+        const response = await this.httpService.axiosRef.get<Stream>(
+          remoteFile.url_private_download,
+          {
+            responseType: 'stream', // Ensures the response is returned as a binary buffer
+            headers: {
+              Authorization: `Bearer ${settings.access_token}`,
+            },
+          },
+        );
+
+        files.push({
+          file: response.data,
+          size: remoteFile.size || parseInt(response.headers['content-length']),
+          type: remoteFile.mimetype,
+        });
+      }
+
+      return files;
+    }
+
+    return [];
+  }
+
+  /**
+   * Fetches the subscriber avatar from Slack
+   *
+   * @param event The message event
+   * @returns The avatar file
+   */
+  async getSubscriberAvatar(
+    event: SlackEventWrapper,
+  ): Promise<AttachmentFile | undefined> {
+    const profile = event.getProfile();
+
+    // Save profile picture locally (messenger URL expires)
+    if (profile) {
+      // Get the image_* with the highest resolution
+      const imageAttribute = Object.keys(profile)
+        .filter((key) => key.startsWith('image_'))
+        .map((key) => parseInt(key.split('_')[1]))
+        .filter((key) => !isNaN(key))
+        .reduce((acc, curr) => (acc > curr ? acc : curr), 0);
+      const imageUrl = profile['image_' + imageAttribute];
+      const response = await this.httpService.axiosRef.get<Stream>(imageUrl, {
+        responseType: 'stream',
+      });
+
+      return {
+        file: response.data,
+        type: response.headers['content-type'],
+        size: parseInt(response.headers['content-length']),
+      };
+    }
+
+    return undefined;
   }
 
   /**
@@ -641,7 +729,9 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * @param event - The event to wrap
    * @returns A Promise that resolves to the end user's profile data
    */
-  async getUserData(event: SlackEventWrapper): Promise<SubscriberCreateDto> {
+  async getSubscriberData(
+    event: SlackEventWrapper,
+  ): Promise<SubscriberCreateDto> {
     const { channelType: channelType } = event.getChannelData();
     const channelId = event.getSenderForeignId();
     const defautLanguage = await this.languageService.getDefaultLanguage();
@@ -655,24 +745,29 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         throw new Error('Unable to retrieve user info');
       }
 
-      const avatar = await this.fetchAndStoreAvatar(userInfo.user, channelId);
+      const profile = userInfo.user?.profile;
 
-      const profile = userInfo.user.profile;
+      event.setProfile(profile);
 
       return {
         foreign_id: channelId,
         first_name:
-          profile.first_name || profile.display_name || profile.real_name,
+          profile?.first_name ||
+          profile?.display_name ||
+          profile?.real_name ||
+          'Anonymous',
         last_name:
-          profile.last_name || profile.display_name || profile.real_name,
-        timezone: userInfo.user.tz_offset,
-        gender: profile.pronouns,
+          profile?.last_name ||
+          profile?.display_name ||
+          profile?.real_name ||
+          'Anonymous',
+        timezone: userInfo.user?.tz_offset,
+        gender: profile?.pronouns,
         channel: event.getChannelData(),
-        avatar: avatar.id,
         assignedAt: null,
         assignedTo: null,
         labels: [],
-        locale: userInfo.user.locale,
+        locale: userInfo.user?.locale,
         language: defautLanguage.code,
         country: '',
         lastvisit: new Date(),
@@ -696,7 +791,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       return {
         foreign_id: channelId,
         first_name: '#',
-        last_name: channel.name,
+        last_name: channel?.name || 'Unknown',
         gender: 'Unknown',
         timezone: 0,
         channel: event.getChannelData(),
@@ -711,62 +806,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         retainedFrom: new Date(),
       };
     }
-  }
-
-  /**
-   * Fetches and stores the end user's shared file
-   *
-   * @param url - The attachment Slack url
-   * @param filename - The attachment filename
-   * @returns The stored attachment
-   */
-  async fetchAndStoreAttachment(url: string, filename: string) {
-    const response = await this.httpService.axiosRef.get<Stream>(url, {
-      responseType: 'stream', // Ensures the response is returned as a binary buffer
-    });
-
-    return await this.attachmentService.store(
-      response.data,
-      {
-        name: filename,
-        size: parseInt(response.headers['content-length']),
-        type: response.headers['content-type'],
-      },
-      config.parameters.avatarDir,
-    );
-  }
-
-  /**
-   * Fetches and stores the end user's profile picture
-   *
-   * @param user - The end user's profile data
-   * @returns The avatar attachment
-   */
-  async fetchAndStoreAvatar(
-    user: UsersInfoResponse['user'],
-    channelId: string,
-  ) {
-    //get the image_* with the highest resolution
-    const imageAttribute = Object.keys(user.profile)
-      .filter((key) => key.startsWith('image_'))
-      .map((key) => parseInt(key.split('_')[1]))
-      .filter((key) => !isNaN(key))
-      .reduce((acc, curr) => (acc > curr ? acc : curr), 0);
-    const imageUrl = user.profile['image_' + imageAttribute];
-
-    const response = await this.httpService.axiosRef.get<Stream>(imageUrl, {
-      responseType: 'stream', // Ensures the response is returned as a binary buffer
-    });
-
-    return await this.attachmentService.store(
-      response.data,
-      {
-        name: channelId,
-        size: parseInt(response.headers['content-length']),
-        type: response.headers['content-type'],
-      },
-      config.parameters.avatarDir,
-    );
   }
 
   /**
@@ -796,11 +835,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     });
 
     if (!data.ok) {
-      const errors = data.response_metadata.messages;
+      const errors = data.response_metadata?.messages;
       await this.api.views.publish({
         view: this.formatHomeTab(
           menuTree,
-          this.buildInvalidContentBlocks(errors),
+          errors ? this.buildInvalidContentBlocks(errors) : [],
         ),
         user_id: userId,
       });
@@ -971,16 +1010,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             type: 'section',
             text: {
               type: 'mrkdwn',
-
               text,
             },
           },
-
-          ...this.formatMenuBlocks(item.call_to_actions, level + 1),
+          ...(item.call_to_actions
+            ? this.formatMenuBlocks(item.call_to_actions || [], level + 1)
+            : []),
         );
       }
       return acc;
-    }, []);
+    }, [] as SlackTypes.KnownBlock[]);
     return blocks;
   }
 
@@ -997,6 +1036,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       if (Array.isArray(parsedContent)) {
         return parsedContent as any as SlackTypes.KnownBlock[];
       }
+      return [];
     } catch (e) {
       this.logger.warn('Invalid home tab content, using default content.');
       return this.buildInvalidContentBlocks(['Invalid JSON array']);
@@ -1040,10 +1080,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       const settings = await this.getSettings();
       this.verifySlackRequest({
         signingSecret: settings.signing_secret,
-        body: req.rawBody,
+        body: req.rawBody as Buffer,
         headers: {
-          'x-slack-signature': req.headers['x-slack-signature'],
-          'x-slack-request-timestamp': req.headers['x-slack-request-timestamp'],
+          'x-slack-signature': req.headers['x-slack-signature'] as string,
+          'x-slack-request-timestamp': req.headers[
+            'x-slack-request-timestamp'
+          ] as string,
         },
       });
       next();
