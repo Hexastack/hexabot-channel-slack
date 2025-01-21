@@ -76,7 +76,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
    * Logs a debug message indicating the initialization of the Slack Channel Handler
    */
   async init(): Promise<void> {
-    this.logger.setContext('Slack Channel Handler');
     this.logger.debug('Initializing...');
     const settings = await this.getSettings();
     this.homeTabContent = this.parseHomeTabContent(settings?.home_tab_content);
