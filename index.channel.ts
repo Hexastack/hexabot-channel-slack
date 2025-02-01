@@ -51,6 +51,13 @@ import { SLACK_CHANNEL_NAME } from './settings';
 import { Slack } from './types';
 import SlackEventWrapper from './wrapper';
 
+const SUPPORTED_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+];
+
 @Injectable()
 export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   private api: WebClient;
@@ -81,6 +88,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   async init(): Promise<void> {
     this.logger.debug('Initializing...');
     const settings = await this.getSettings();
+    this.UploadAllStoredAttachements();
     this.homeTabContent = this.parseHomeTabContent(settings?.home_tab_content);
     this.api = new WebClient(settings?.access_token);
   }
@@ -649,9 +657,23 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
   }
 
   attachmentIsSlackImage(attachment: Attachment) {
-    return ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'].includes(
-      attachment.type,
-    );
+    return SUPPORTED_IMAGE_TYPES.includes(attachment.type);
+  }
+
+  async UploadAllStoredAttachements() {
+    //TODO: find a better name
+    const attachments = await this.attachmentService.find({
+      [`channel.${this.getName()}`]: { $exists: false },
+      type: { $in: SUPPORTED_IMAGE_TYPES },
+    });
+    attachments.forEach((attachment) => {
+      this.uploadImageIfNotExists(attachment).catch((error) => {
+        this.logger.error(
+          `Failed to upload attachment ${attachment.id}`,
+          error,
+        );
+      });
+    });
   }
 
   async uploadFile(attachment: Attachment, channel_id?: string) {
