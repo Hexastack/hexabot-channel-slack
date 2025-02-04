@@ -304,7 +304,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     );
 
     return {
-      blocks: [textSection, { type: 'actions', elements }],
+      text: message.text === '' ? 'quick Replies' : message.text,
+      blocks:
+        message.text === ''
+          ? [{ type: 'actions', elements }]
+          : [textSection, { type: 'actions', elements }],
     };
   }
 
@@ -378,8 +382,8 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       if (!attachment) {
         throw new Error(`Unable to find attachment ${attachmentRef.id}`);
       }
+      attachment = await this.uploadImageIfNotExists(attachment);
       if (this.attachmentIsSlackImage(attachment)) {
-        attachment = await this.uploadImageIfNotExists(attachment);
         return {
           text: 'image',
           blocks: [
@@ -399,7 +403,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
             },
             ...(message.quickReplies?.length
               ? this._quickRepliesFormat({
-                  text: '📄',
+                  text: '',
                   quickReplies: message.quickReplies || [],
                 }).blocks
               : []),
@@ -409,7 +413,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     }
     return message.quickReplies?.length
       ? this._quickRepliesFormat({
-          text: '📄',
+          text: '',
           quickReplies: message.quickReplies || [],
         })
       : undefined;
@@ -664,7 +668,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     //TODO: find a better name
     const attachments = await this.attachmentService.find({
       [`channel.${this.getName()}`]: { $exists: false },
-      type: { $in: SUPPORTED_IMAGE_TYPES },
     });
     attachments.forEach((attachment) => {
       this.uploadImageIfNotExists(attachment).catch((error) => {
@@ -711,6 +714,77 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     });
   }
 
+  async handleAttachment(
+    message: StdOutgoingAttachmentMessage,
+    channelId: string,
+    _options?: BlockOptions,
+  ) {
+    const attachmentRef = message.attachment.payload;
+    if ('id' in attachmentRef && attachmentRef.id) {
+      let attachment = await this.attachmentService.findOne(attachmentRef.id);
+
+      if (!attachment) {
+        throw new Error(`Unable to find attachment ${attachmentRef.id}`);
+      }
+      debugger;
+      attachment = await this.uploadImageIfNotExists(attachment);
+      if (this.attachmentIsSlackImage(attachment)) {
+        return {
+          text: 'image',
+          blocks: [
+            {
+              type: 'image',
+              title: {
+                type: 'plain_text',
+                text: attachment.name,
+              },
+              block_id:
+                'image_block_' +
+                attachment.channel?.[this.getName()].slackFile.id,
+              slack_file: {
+                id: attachment.channel?.[this.getName()].slackFile.id,
+              },
+              alt_text: attachment.name,
+            },
+            ...(message.quickReplies?.length
+              ? this._quickRepliesFormat({
+                  text: '',
+                  quickReplies: message.quickReplies || [],
+                }).blocks
+              : []),
+          ],
+        };
+      } else {
+        await this.api.files.remote.share({
+          channels: channelId,
+          file: attachment.channel?.[this.getName()].slackFile.id,
+        });
+        return this._quickRepliesFormat({
+          text: '',
+          quickReplies: message.quickReplies || [],
+        });
+      }
+    }
+
+    if ('url' in attachmentRef && attachmentRef.url) {
+      const { data: file } = await this.httpService.axiosRef.get<Stream>(
+        attachmentRef.url,
+        {
+          responseType: 'stream',
+        },
+      );
+      const result = await this.api.filesUploadV2({
+        filename: '',
+        file,
+        channel_id: channelId,
+      });
+      if (!result.ok) {
+        this.logger.error('Unable to send attachment', result.error);
+        throw new Error('Unable to send attachment');
+      }
+    }
+  }
+
   /**
    * Sends a Slack message to the end user
    *
@@ -727,16 +801,16 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     _context: any,
   ): Promise<{ mid: string }> {
     const channelId = event.getSenderForeignId();
-
-    // Deal with attachment uploads
+    let message;
     if (envelope.format === OutgoingMessageFormat.attachment) {
-      await this.sendDirectAttachment(
-        envelope.message.attachment.payload,
+      message = await this.handleAttachment(
+        envelope.message,
         channelId,
+        options,
       );
+    } else {
+      message = await this._formatMessage(envelope, options);
     }
-
-    const message = await this._formatMessage(envelope, options);
 
     if (message) {
       const data = await this.api.chat.postMessage({
