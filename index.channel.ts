@@ -792,11 +792,11 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
               type: 'image',
               title: {
                 type: 'plain_text',
-                text: 'this is name todo',
+                text: 'remote file',
               },
               block_id: 'image_block_' + slack_file_id,
               url: attachmentRef.url,
-              alt_text: 'remote file todo',
+              alt_text: 'remote file',
             },
             ...(message.quickReplies?.length
               ? this._quickRepliesFormat({
