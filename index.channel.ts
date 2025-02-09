@@ -726,7 +726,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
       if (!attachment) {
         throw new Error(`Unable to find attachment ${attachmentRef.id}`);
       }
-      debugger;
       attachment = await this.uploadImageIfNotExists(attachment);
       if (this.attachmentIsSlackImage(attachment)) {
         return {
@@ -762,7 +761,6 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           file: attachment.channel?.[this.getName()].slackFile.id,
         });
         const mid = result.file?.shares?.private?.[channelId][0].ts; //get the ts of the last share of the file
-        debugger;
         return message.quickReplies?.length
           ? {
               message: this._quickRepliesFormat({
@@ -776,38 +774,28 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     }
 
     if ('url' in attachmentRef && attachmentRef.url) {
-      const result = await this.api.files.remote.add({
+      const addResult = await this.api.files.remote.add({
         title: attachmentRef.url,
         external_id: attachmentRef.url,
         external_url: attachmentRef.url,
       });
-      const external_url = result.file?.external_url;
-      const slack_file_id = result.file?.id as string;
 
-      return {
-        message: {
-          text: 'image',
-          blocks: [
-            {
-              type: 'image',
-              title: {
-                type: 'plain_text',
-                text: 'remote file',
-              },
-              block_id: 'image_block_' + slack_file_id,
-              url: attachmentRef.url,
-              alt_text: 'remote file',
-            },
-            ...(message.quickReplies?.length
-              ? this._quickRepliesFormat({
-                  text: '',
-                  quickReplies: message.quickReplies || [],
-                }).blocks
-              : []),
-          ],
-        },
-      };
+      const slack_file_id = addResult.file?.id as string;
+      const shareResult = await this.api.files.remote.share({
+        file: slack_file_id,
+        channels: channelId,
+      });
 
+      const mid = shareResult.file?.shares?.private?.[channelId][0].ts; //get the ts of the last share of the file
+      return message.quickReplies?.length
+        ? {
+            message: this._quickRepliesFormat({
+              text: '',
+              quickReplies: message.quickReplies || [],
+            }),
+            mid,
+          }
+        : { mid };
     }
   }
 
