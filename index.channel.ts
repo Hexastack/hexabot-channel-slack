@@ -785,7 +785,7 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
 
     if ('url' in attachmentRef && attachmentRef.url) {
       const addResult = await this.api.files.remote.add({
-        title: attachmentRef.url,
+        title: this.getFilenameFromUrl(attachmentRef.url),
         external_id: attachmentRef.url,
         external_url: attachmentRef.url,
       });
@@ -807,6 +807,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
           }
         : { mid };
     }
+  }
+
+  getFilenameFromUrl(url) {
+    const path = new URL(url).pathname;
+    const filename = path.substring(path.lastIndexOf('/') + 1);
+    return filename;
   }
 
   /**
