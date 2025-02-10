@@ -809,6 +809,12 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
     }
   }
 
+  /**
+   * Extracts the filename from a given URL.
+   *
+   * @param url - The URL from which to extract the filename.
+   * @returns - The extracted filename as a string.
+   */
   getFilenameFromUrl(url) {
     const path = new URL(url).pathname;
     const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path; // Remove trailing slash if exists
