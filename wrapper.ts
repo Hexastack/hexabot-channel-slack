@@ -11,13 +11,13 @@ import { Profile as SlackProfile } from '@slack/web-api/dist/types/response/User
 import { Attachment } from '@/attachment/schemas/attachment.schema';
 import EventWrapper from '@/channel/lib/EventWrapper';
 import { FileType } from '@/chat/schemas/types/attachment';
+import { PayloadType } from '@/chat/schemas/types/button';
 import {
   IncomingMessageType,
   StdEventType,
   StdIncomingMessage,
 } from '@/chat/schemas/types/message';
 import { Payload } from '@/chat/schemas/types/quick-reply';
-import { PayloadType } from '@/chat/schemas/types/button';
 
 import { SlackHandler } from './index.channel';
 import { SLACK_CHANNEL_NAME } from './settings';
