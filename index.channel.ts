@@ -632,6 +632,17 @@ export class SlackHandler extends ChannelHandler<typeof SLACK_CHANNEL_NAME> {
         this.logger.error('Unable to send attachment', result.error);
         throw new Error('Unable to send attachment');
       }
+
+      // Trigger sent message event
+      const sentMessage: MessageCreateDto = {
+        mid: response && 'mid' in response ? response.mid : '',
+        message: envelope.message,
+        recipient: recipient.id,
+        handover: !!(options && options.assignTo),
+        read: false,
+        delivery: false,
+      };
+      this.eventEmitter.emit('hook:chatbot:sent', sentMessage, event);
     }
 
     if (message) {
