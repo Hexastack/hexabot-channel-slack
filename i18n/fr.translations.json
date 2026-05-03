@@ -1,0 +1,29 @@
+{
+  "slack": {
+    "Slack Channel": "Canal Slack",
+    "Bot token credential": "Identifiant du jeton du bot",
+    "Credential containing the Slack bot token used for Web API calls.": "Identifiant contenant le jeton du bot Slack utilise pour les appels Web API.",
+    "Signing secret credential": "Identifiant du secret de signature",
+    "Credential containing the Slack signing secret used to verify webhook requests.": "Identifiant contenant le secret de signature Slack utilise pour verifier les requetes webhook.",
+    "App ID": "ID de l'application",
+    "Slack application ID. When set, events for other Slack apps are ignored.": "ID de l'application Slack. Lorsqu'il est renseigne, les evenements des autres applications Slack sont ignores.",
+    "Team ID": "ID de l'espace de travail",
+    "Optional Slack workspace/team ID. When set, events for other workspaces are ignored.": "ID optionnel de l'espace de travail Slack. Lorsqu'il est renseigne, les evenements des autres espaces de travail sont ignores.",
+    "Home tab content": "Contenu de l'onglet Accueil",
+    "JSON array of Slack Block Kit blocks rendered before the Hexabot menu.": "Tableau JSON de blocs Slack Block Kit affiche avant le menu Hexabot.",
+    "Enable Home tab": "Activer l'onglet Accueil",
+    "Publish the Slack App Home tab when a Slack user opens it.": "Publie l'onglet Accueil de l'application Slack lorsqu'un utilisateur Slack l'ouvre.",
+    "Reply in threads": "Repondre dans les fils",
+    "Reply in the source Slack thread for non-DM conversations when thread metadata is available.": "Repond dans le fil Slack source pour les conversations hors messages directs lorsque les metadonnees du fil sont disponibles.",
+    "Auto-join public channels": "Rejoindre automatiquement les canaux publics",
+    "Attempt conversations.join and retry once when Slack reports the bot is not in a public channel.": "Tente conversations.join et reessaie une fois lorsque Slack indique que le bot n'est pas dans un canal public.",
+    "Thread inactivity (hours)": "Inactivite du fil (heures)",
+    "Automatically start a new thread when the last message is older than this threshold.": "Demarre automatiquement un nouveau fil lorsque le dernier message depasse ce seuil."
+  },
+  "View More": "Voir plus",
+  "Options": "Options",
+  "Menu": "Menu",
+  "Visit": "Visiter",
+  "Select": "Selectionner",
+  "Image": "Image"
+}

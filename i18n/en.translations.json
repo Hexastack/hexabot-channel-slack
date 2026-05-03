@@ -1,0 +1,29 @@
+{
+  "slack": {
+    "Slack Channel": "Slack Channel",
+    "Bot token credential": "Bot token credential",
+    "Credential containing the Slack bot token used for Web API calls.": "Credential containing the Slack bot token used for Web API calls.",
+    "Signing secret credential": "Signing secret credential",
+    "Credential containing the Slack signing secret used to verify webhook requests.": "Credential containing the Slack signing secret used to verify webhook requests.",
+    "App ID": "App ID",
+    "Slack application ID. When set, events for other Slack apps are ignored.": "Slack application ID. When set, events for other Slack apps are ignored.",
+    "Team ID": "Team ID",
+    "Optional Slack workspace/team ID. When set, events for other workspaces are ignored.": "Optional Slack workspace/team ID. When set, events for other workspaces are ignored.",
+    "Home tab content": "Home tab content",
+    "JSON array of Slack Block Kit blocks rendered before the Hexabot menu.": "JSON array of Slack Block Kit blocks rendered before the Hexabot menu.",
+    "Enable Home tab": "Enable Home tab",
+    "Publish the Slack App Home tab when a Slack user opens it.": "Publish the Slack App Home tab when a Slack user opens it.",
+    "Reply in threads": "Reply in threads",
+    "Reply in the source Slack thread for non-DM conversations when thread metadata is available.": "Reply in the source Slack thread for non-DM conversations when thread metadata is available.",
+    "Auto-join public channels": "Auto-join public channels",
+    "Attempt conversations.join and retry once when Slack reports the bot is not in a public channel.": "Attempt conversations.join and retry once when Slack reports the bot is not in a public channel.",
+    "Thread inactivity (hours)": "Thread inactivity (hours)",
+    "Automatically start a new thread when the last message is older than this threshold.": "Automatically start a new thread when the last message is older than this threshold."
+  },
+  "View More": "View More",
+  "Options": "Options",
+  "Menu": "Menu",
+  "Visit": "Visit",
+  "Select": "Select",
+  "Image": "Image"
+}
