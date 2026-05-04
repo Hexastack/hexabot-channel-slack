@@ -20,6 +20,8 @@ import {
   MenuTree,
   MenuType,
   MessageInboundEvent,
+  SocketRequest,
+  SocketResponse,
   SubscriberCreateDto,
 } from '@hexabot-ai/api';
 import type {
@@ -88,7 +90,7 @@ export default class SlackChannelHandler extends HttpChannelHandler<
   private credentialService?: CredentialService;
 
   constructor() {
-    super(SLACK_CHANNEL_NAME, SLACK_CHANNEL_SOURCE_SETTINGS_SCHEMA);
+    super(SLACK_CHANNEL_NAME, SLACK_CHANNEL_SOURCE_SETTINGS_SCHEMA as any);
   }
 
   getCapabilities(): ChannelCapabilities {
@@ -100,28 +102,37 @@ export default class SlackChannelHandler extends HttpChannelHandler<
   }
 
   override async handle(
-    req: Request,
-    res: Response,
+    req: Request | SocketRequest,
+    res: Response | SocketResponse,
     source: Source,
     workflowId?: string,
   ): Promise<void> {
-    if (req.method === 'GET') {
-      return this.verifyWebhook(req, res, source);
-    }
-
-    try {
-      await this.verifySignature(req, res, source);
-    } catch (err) {
-      this.logger.warn('Slack webhook signature verification failed', err);
-      res.status(401).json({ error: 'Unauthorized' });
+    if (this.isSocketRequest(req) || this.isSocketResponse(res)) {
+      res.status(400).json({ error: 'Slack webhooks require HTTP transport' });
 
       return;
     }
 
-    const payload = this.parseSlackPayload(req.body);
+    const httpReq = req as Request;
+    const httpRes = res as Response;
+
+    if (httpReq.method === 'GET') {
+      return this.verifyWebhook(httpReq, httpRes, source);
+    }
+
+    try {
+      await this.verifySignature(httpReq, httpRes, source);
+    } catch (err) {
+      this.logger.warn('Slack webhook signature verification failed', err);
+      httpRes.status(401).json({ error: 'Unauthorized' });
+
+      return;
+    }
+
+    const payload = this.parseSlackPayload(httpReq.body);
 
     if (payload.type === 'url_verification') {
-      res.status(200).send(payload.challenge);
+      httpRes.status(200).send(payload.challenge);
 
       return;
     }
@@ -131,13 +142,13 @@ export default class SlackChannelHandler extends HttpChannelHandler<
     ]);
 
     if (!this.isSourcePayload(settings, payload)) {
-      res.status(200).send('');
+      httpRes.status(200).send('');
 
       return;
     }
 
     if (this.isAppHomeOpenedPayload(payload)) {
-      res.status(200).send('');
+      httpRes.status(200).send('');
       await this.handleAppHomeOpened(settings, payload);
 
       return;
@@ -155,12 +166,12 @@ export default class SlackChannelHandler extends HttpChannelHandler<
       events = await this.decodeParsedPayload(payload, source, settings);
     } catch (err) {
       this.logger.warn('Failed to decode Slack webhook payload', err);
-      res.status(400).json({ error: 'Bad Request' });
+      httpRes.status(400).json({ error: 'Bad Request' });
 
       return;
     }
 
-    res.status(200).send('');
+    httpRes.status(200).send('');
 
     for (const event of events) {
       event.setHandler(this);
@@ -958,5 +969,15 @@ export default class SlackChannelHandler extends HttpChannelHandler<
 
   private ensureHttpUrl(url: string): string {
     return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  }
+
+  private isSocketRequest(req: Request | SocketRequest): req is SocketRequest {
+    return (req as SocketRequest).isSocket === true;
+  }
+
+  private isSocketResponse(
+    res: Response | SocketResponse,
+  ): res is SocketResponse {
+    return !('sendStatus' in res);
   }
 }
